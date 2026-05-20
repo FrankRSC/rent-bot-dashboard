@@ -1,15 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Pencil, Save, X, Wifi, WifiOff, Bell, BellOff, CheckCircle2, CreditCard } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Pencil, Save, X, Wifi, WifiOff, Bell, BellOff, CheckCircle2, CreditCard, User, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { formatAccount } from "@/lib/utils";
 import type { AccountType } from "@/lib/types";
 import { useStore } from "@/store/useStore";
@@ -22,6 +18,20 @@ const ACCOUNT_TYPE_LABEL: Record<string, string> = {
   CARD: "Tarjeta de débito (16 dígitos)",
   PHONE: "Número de teléfono (10 dígitos)",
 };
+
+function SectionHeader({ icon: Icon, title, subtitle }: { icon: React.ElementType; title: string; subtitle?: string }) {
+  return (
+    <div className="flex items-center gap-3 px-6 py-4 border-b border-slate-100">
+      <div className="w-8 h-8 rounded-xl bg-[#eef1fd] flex items-center justify-center shrink-0">
+        <Icon className="w-4 h-4 text-[#2952F3]" />
+      </div>
+      <div>
+        <p className="text-[14px] font-semibold text-[#0B1426]">{title}</p>
+        {subtitle && <p className="text-[12px] text-slate-400">{subtitle}</p>}
+      </div>
+    </div>
+  );
+}
 
 export default function ConfiguracionPage() {
   const { settings, updateSettings } = useStore();
@@ -38,32 +48,21 @@ export default function ConfiguracionPage() {
 
   useEffect(() => {
     api.getLandlord(LANDLORD_ID).then((landlord) => {
-      updateSettings({
-        landlordName: landlord.name,
-        email: landlord.email,
-        phone: landlord.phone ?? "",
-        ownerBank: landlord.ownerBank ?? "",
-        beneficiaryAccount: landlord.beneficiaryAccount ?? "",
-        beneficiaryAccountType: landlord.beneficiaryAccountType ?? "CLABE",
-      });
-      setProfileForm({
+      const data = {
         landlordName: landlord.name,
         email: landlord.email,
         phone: landlord.phone ?? "",
         ownerBank: landlord.ownerBank ?? "",
         beneficiaryAccount: landlord.beneficiaryAccount ?? "",
         beneficiaryAccountType: (landlord.beneficiaryAccountType ?? "CLABE") as AccountType,
-      });
+      };
+      updateSettings(data);
+      setProfileForm(data);
     }).catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const initials = settings.landlordName
-    .split(" ")
-    .slice(0, 2)
-    .map((w) => w[0] ?? "")
-    .join("")
-    .toUpperCase();
+  const initials = settings.landlordName.split(" ").slice(0, 2).map((w) => w[0] ?? "").join("").toUpperCase();
 
   const handleSaveProfile = async () => {
     setSaving(true);
@@ -78,122 +77,124 @@ export default function ConfiguracionPage() {
       });
       updateSettings(profileForm);
       setEditingProfile(false);
-    } catch {
-      // silenciado — agregar toast en el futuro
-    } finally {
-      setSaving(false);
-    }
+    } catch { /* silenciado */ }
+    finally { setSaving(false); }
   };
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="space-y-5 max-w-2xl">
+
+      {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Configuración</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Gestiona tu perfil y preferencias del sistema
-        </p>
+        <h1 className="text-[22px] font-bold text-[#0B1426] tracking-tight">Configuración</h1>
+        <p className="text-sm text-slate-400 mt-0.5">Gestiona tu perfil y preferencias del sistema</p>
       </div>
 
       {/* Perfil */}
-      <Card className="shadow-sm">
-        <CardHeader className="flex flex-row items-center justify-between pb-3">
-          <CardTitle className="text-base">Perfil del arrendador</CardTitle>
+      <div
+        className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden"
+        style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-[#eef1fd] flex items-center justify-center shrink-0">
+              <User className="w-4 h-4 text-[#2952F3]" />
+            </div>
+            <div>
+              <p className="text-[14px] font-semibold text-[#0B1426]">Perfil del arrendador</p>
+              <p className="text-[12px] text-slate-400">Información personal y cuenta de cobro</p>
+            </div>
+          </div>
           {!editingProfile ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setProfileForm({
-                  landlordName: settings.landlordName,
-                  email: settings.email,
-                  phone: settings.phone,
-                  ownerBank: settings.ownerBank,
-                  beneficiaryAccount: settings.beneficiaryAccount,
-                  beneficiaryAccountType: (settings.beneficiaryAccountType || "CLABE") as AccountType,
-                });
-                setEditingProfile(true);
-              }}
-            >
-              <Pencil className="w-3.5 h-3.5 mr-1.5" />
-              Editar
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => {
+              setProfileForm({
+                landlordName: settings.landlordName, email: settings.email, phone: settings.phone,
+                ownerBank: settings.ownerBank, beneficiaryAccount: settings.beneficiaryAccount,
+                beneficiaryAccountType: (settings.beneficiaryAccountType || "CLABE") as AccountType,
+              });
+              setEditingProfile(true);
+            }}>
+              <Pencil className="w-3.5 h-3.5" /> Editar
             </Button>
           ) : (
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={() => setEditingProfile(false)} disabled={saving}>
-                <X className="w-3.5 h-3.5 mr-1" />
-                Cancelar
+                <X className="w-3.5 h-3.5 mr-1" /> Cancelar
               </Button>
-              <Button size="sm" className="bg-[#2952F3] hover:bg-[#1e3fd4]" onClick={handleSaveProfile} disabled={saving}>
-                <Save className="w-3.5 h-3.5 mr-1" />
-                {saving ? "Guardando..." : "Guardar"}
+              <Button size="sm" className="bg-[#2952F3] hover:bg-[#1e3fd4] gap-1.5" onClick={handleSaveProfile} disabled={saving}>
+                <Save className="w-3.5 h-3.5" /> {saving ? "Guardando..." : "Guardar"}
               </Button>
             </div>
           )}
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center gap-4">
-            <Avatar className="w-14 h-14">
-              <AvatarFallback className="bg-[#2952F3] text-white text-lg font-bold">
-                {initials || "?"}
-              </AvatarFallback>
-            </Avatar>
-            {!editingProfile && (
-              <div>
-                <p className="font-semibold text-slate-900">{settings.landlordName || "—"}</p>
-                <p className="text-sm text-muted-foreground">{settings.email}</p>
-                <p className="text-sm text-muted-foreground">{settings.phone}</p>
+        </div>
+
+        <div className="p-6">
+          {!editingProfile ? (
+            <div className="space-y-5">
+              {/* Avatar + info */}
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-full bg-[#2952F3] flex items-center justify-center text-white text-lg font-bold shrink-0">
+                  {initials || "?"}
+                </div>
+                <div>
+                  <p className="text-[16px] font-semibold text-[#0B1426]">{settings.landlordName || "—"}</p>
+                  <p className="text-[13px] text-slate-400">{settings.email}</p>
+                  {settings.phone && <p className="text-[13px] text-slate-400">{settings.phone}</p>}
+                </div>
               </div>
-            )}
-          </div>
-          {!editingProfile && settings.beneficiaryAccount && (
-            <div className="flex items-center gap-3 pt-2 border-t">
-              <div className="bg-slate-100 p-1.5 rounded-md shrink-0">
-                <CreditCard className="w-4 h-4 text-slate-600" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">{settings.ownerBank} · {ACCOUNT_TYPE_LABEL[settings.beneficiaryAccountType] ?? settings.beneficiaryAccountType}</p>
-                <p className="font-mono text-sm tracking-wider">{formatAccount(settings.beneficiaryAccount, (settings.beneficiaryAccountType || "CLABE") as AccountType)}</p>
-              </div>
+
+              {settings.beneficiaryAccount && (
+                <div className="flex items-center gap-3 pt-4 border-t border-slate-100">
+                  <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
+                    <CreditCard className="w-4 h-4 text-slate-500" />
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-slate-400 mb-0.5">
+                      {settings.ownerBank || "Banco"} · {ACCOUNT_TYPE_LABEL[settings.beneficiaryAccountType] ?? settings.beneficiaryAccountType}
+                    </p>
+                    <p className="font-mono text-[14px] font-medium text-[#0B1426] tracking-wider">
+                      {formatAccount(settings.beneficiaryAccount, (settings.beneficiaryAccountType || "CLABE") as AccountType)}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-          {editingProfile && (
-            <div className="grid grid-cols-1 gap-4 pt-1">
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium">Nombre completo</label>
-                <Input value={profileForm.landlordName} onChange={(e) => setProfileForm({ ...profileForm, landlordName: e.target.value })} />
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[13px] font-medium text-slate-700">Nombre completo</label>
+                  <Input value={profileForm.landlordName} onChange={(e) => setProfileForm({ ...profileForm, landlordName: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[13px] font-medium text-slate-700">Correo electrónico</label>
+                  <Input type="email" value={profileForm.email} onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[13px] font-medium text-slate-700">Teléfono (52XXXXXXXXXX)</label>
+                  <Input value={profileForm.phone} onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })} />
+                </div>
               </div>
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium">Correo electrónico</label>
-                <Input type="email" value={profileForm.email} onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })} />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium">Teléfono (52XXXXXXXXXX)</label>
-                <Input value={profileForm.phone} onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })} />
-              </div>
-              <div className="pt-1 border-t">
-                <p className="text-sm font-medium mb-3">Cuenta destino para pagos</p>
-                <div className="grid grid-cols-1 gap-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <label className="text-sm font-medium">Banco receptor</label>
-                      <Input placeholder="Ej. BBVA" value={profileForm.ownerBank} onChange={(e) => setProfileForm({ ...profileForm, ownerBank: e.target.value })} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-sm font-medium">Tipo de cuenta</label>
-                      <Select value={profileForm.beneficiaryAccountType} onValueChange={(v) => setProfileForm({ ...profileForm, beneficiaryAccountType: (v ?? "CLABE") as AccountType })}>
-                        <SelectTrigger>
-                          <SelectValue>{ACCOUNT_TYPE_LABEL[profileForm.beneficiaryAccountType] ?? profileForm.beneficiaryAccountType}</SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="CLABE">CLABE (18 dígitos)</SelectItem>
-                          <SelectItem value="CARD">Tarjeta de débito (16 dígitos)</SelectItem>
-                          <SelectItem value="PHONE">Número de teléfono (10 dígitos)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+              <div className="pt-4 border-t border-slate-100">
+                <p className="text-[13px] font-semibold text-[#0B1426] mb-3">Cuenta destino para cobros</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[13px] font-medium text-slate-700">Banco receptor</label>
+                    <Input placeholder="Ej. BBVA" value={profileForm.ownerBank} onChange={(e) => setProfileForm({ ...profileForm, ownerBank: e.target.value })} />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium">Número de cuenta / CLABE</label>
+                    <label className="text-[13px] font-medium text-slate-700">Tipo de cuenta</label>
+                    <Select value={profileForm.beneficiaryAccountType} onValueChange={(v) => setProfileForm({ ...profileForm, beneficiaryAccountType: (v ?? "CLABE") as AccountType })}>
+                      <SelectTrigger><SelectValue>{ACCOUNT_TYPE_LABEL[profileForm.beneficiaryAccountType]}</SelectValue></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="CLABE">CLABE (18 dígitos)</SelectItem>
+                        <SelectItem value="CARD">Tarjeta de débito (16 dígitos)</SelectItem>
+                        <SelectItem value="PHONE">Número de teléfono (10 dígitos)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <label className="text-[13px] font-medium text-slate-700">Número de cuenta</label>
                     <Input
                       placeholder={profileForm.beneficiaryAccountType === "CLABE" ? "18 dígitos" : profileForm.beneficiaryAccountType === "CARD" ? "16 dígitos" : "10 dígitos"}
                       value={profileForm.beneficiaryAccount}
@@ -204,70 +205,67 @@ export default function ConfiguracionPage() {
               </div>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Bot WhatsApp */}
-      <Card className="shadow-sm">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Conexión con bot de WhatsApp</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <div
+        className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden"
+        style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
+      >
+        <SectionHeader icon={Wifi} title="Bot de WhatsApp" subtitle="Conexión y estado del servicio de cobro automático" />
+        <div className="p-6 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className={`w-2.5 h-2.5 rounded-full ${settings.botConnected ? "bg-[#047857] animate-pulse" : "bg-slate-300"}`} />
+              <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${settings.botConnected ? "bg-emerald-500 animate-pulse" : "bg-slate-300"}`} />
               <div>
-                <p className="text-sm font-medium">{settings.botConnected ? "Bot en línea" : "Bot desconectado"}</p>
-                <p className="text-xs text-muted-foreground">
-                  {settings.botConnected ? "Recibiendo y procesando mensajes" : "El bot no está respondiendo mensajes"}
-                </p>
+                <p className="text-[14px] font-medium text-[#0B1426]">{settings.botConnected ? "Bot en línea" : "Bot desconectado"}</p>
+                <p className="text-[12px] text-slate-400">{settings.botConnected ? "Recibiendo y procesando mensajes" : "El bot no está respondiendo"}</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <Badge variant="outline" className={settings.botConnected ? "border-[#6ee7b7] text-[#047857]" : "border-slate-300 text-slate-500"}>
-                {settings.botConnected ? <Wifi className="w-3 h-3 mr-1" /> : <WifiOff className="w-3 h-3 mr-1" />}
+              <span className={`inline-flex items-center gap-1.5 border text-[11px] font-semibold px-2.5 py-1 rounded-full ${settings.botConnected ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-slate-100 border-slate-200 text-slate-500"}`}>
+                {settings.botConnected ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
                 {settings.botConnected ? "Conectado" : "Desconectado"}
-              </Badge>
-              <Switch checked={settings.botConnected} onCheckedChange={(checked) => updateSettings({ botConnected: checked })} />
+              </span>
+              <Switch checked={settings.botConnected} onCheckedChange={(c) => updateSettings({ botConnected: c })} />
             </div>
           </div>
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
-            <p className="font-medium mb-0.5">Validación en tiempo real</p>
-            <p className="text-xs text-amber-700">
-              Los comprobantes son verificados directamente con Banxico. El proceso es automático.
-            </p>
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+            <p className="text-[13px] font-semibold text-amber-800 mb-0.5">Validación en tiempo real</p>
+            <p className="text-[12px] text-amber-700">Los comprobantes se verifican directamente con Banxico de forma automática.</p>
           </div>
-        </CardContent>
-      </Card>
-
-      <Separator />
+        </div>
+      </div>
 
       {/* Notificaciones */}
-      <Card className="shadow-sm">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Preferencias de notificación</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <div
+        className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden"
+        style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
+      >
+        <SectionHeader icon={Settings2} title="Notificaciones y recordatorios" />
+        <div className="divide-y divide-slate-100">
           {[
-            { key: "notifyOnPayment" as const, icon: CheckCircle2, label: "Notificar al recibir pago", desc: "Recibe una notificación cuando un inquilino pague su renta" },
-            { key: "notifyOnOverdue" as const, icon: BellOff, label: "Notificar pagos vencidos", desc: "Recibe alertas cuando un pago esté vencido" },
-            { key: "autoRemindersEnabled" as const, icon: Bell, label: "Recordatorios automáticos", desc: "El bot enviará recordatorios de pago automáticamente por WhatsApp" },
+            { key: "notifyOnPayment" as const, icon: CheckCircle2, label: "Notificar al recibir pago", desc: "Alerta cuando un inquilino pague su renta" },
+            { key: "notifyOnOverdue" as const, icon: BellOff, label: "Notificar pagos vencidos", desc: "Alerta cuando un pago esté vencido" },
+            { key: "autoRemindersEnabled" as const, icon: Bell, label: "Recordatorios automáticos", desc: "El bot enviará recordatorios por WhatsApp automáticamente" },
           ].map(({ key, icon: Icon, label, desc }) => (
-            <div key={key} className="flex items-center justify-between">
+            <div key={key} className="flex items-center justify-between px-6 py-4">
               <div className="flex items-center gap-3">
-                <div className="bg-slate-100 p-1.5 rounded-md">
-                  <Icon className="w-4 h-4 text-slate-600" />
+                <div className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
+                  <Icon className="w-4 h-4 text-slate-500" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium">{label}</p>
-                  <p className="text-xs text-muted-foreground">{desc}</p>
+                  <p className="text-[14px] font-medium text-[#0B1426]">{label}</p>
+                  <p className="text-[12px] text-slate-400">{desc}</p>
                 </div>
               </div>
-              <Switch checked={settings[key] as boolean} onCheckedChange={(checked) => updateSettings({ [key]: checked })} />
+              <Switch checked={settings[key] as boolean} onCheckedChange={(c) => updateSettings({ [key]: c })} />
             </div>
           ))}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
+
     </div>
   );
 }

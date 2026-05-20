@@ -5,18 +5,21 @@ import Link from "next/link";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Download, ExternalLink, Search, SlidersHorizontal, CheckCircle2, Clock, XCircle, TrendingUp } from "lucide-react";
-import { ApiErrorState } from "@/components/layout/ApiErrorState";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useStore } from "@/store/useStore";
-import { cn } from "@/lib/utils";
+import { ApiErrorState } from "@/components/layout/ApiErrorState";
+import { cn, formatCurrency } from "@/lib/utils";
 import type { AttemptStatus } from "@/lib/types";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const MONTHS = [
   { value: "todos", label: "Todos los meses" },
-  { value: `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`, label: format(new Date(), "MMMM yyyy", { locale: es }) },
+  {
+    value: `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`,
+    label: format(new Date(), "MMMM yyyy", { locale: es }),
+  },
 ];
 
 const STATUS_FILTER = [
@@ -34,33 +37,23 @@ function statusGroup(s: AttemptStatus): "cobrado" | "pendiente" | "rechazado" {
   return "rechazado";
 }
 
-function formatMXN(n: number) {
-  return new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 0 }).format(n);
-}
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
 function StatusPill({ status }: { status: AttemptStatus }) {
   const group = statusGroup(status);
-  if (group === "cobrado") {
+  if (group === "cobrado")
     return (
-      <span className="inline-flex items-center gap-1.5 bg-[#ecfdf5] border border-[#6ee7b7] text-[#047857] text-[11px] font-semibold px-2.5 py-1 rounded-full whitespace-nowrap">
-        <svg width="8" height="8" viewBox="0 0 8 8" fill="none"><path d="M1.5 4L3 5.5L6.5 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-        Cobrado
+      <span className="inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-semibold px-2.5 py-[3px] rounded-full whitespace-nowrap">
+        <CheckCircle2 className="w-3 h-3" /> Cobrado
       </span>
     );
-  }
-  if (group === "pendiente") {
+  if (group === "pendiente")
     return (
-      <span className="inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-700 text-[11px] font-semibold px-2.5 py-1 rounded-full whitespace-nowrap">
-        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" />
-        Pendiente
+      <span className="inline-flex items-center gap-1 bg-amber-50 border border-amber-200 text-amber-700 text-[11px] font-semibold px-2.5 py-[3px] rounded-full whitespace-nowrap">
+        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" /> Pendiente
       </span>
     );
-  }
   return (
-    <span className="inline-flex items-center gap-1.5 bg-red-50 border border-red-200 text-red-600 text-[11px] font-semibold px-2.5 py-1 rounded-full whitespace-nowrap">
-      <svg width="8" height="8" viewBox="0 0 8 8" fill="none"><path d="M2 2L6 6M6 2L2 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+    <span className="inline-flex items-center gap-1 bg-red-50 border border-red-200 text-red-600 text-[11px] font-semibold px-2.5 py-[3px] rounded-full whitespace-nowrap">
+      <XCircle className="w-3 h-3" />
       {status === "ABANDONED" ? "Abandonado" : "Revisión"}
     </span>
   );
@@ -86,100 +79,90 @@ export default function PagosPage() {
     return m;
   }, [properties]);
 
-  const filtered = useMemo(() => {
-    return payments.filter((a) => {
-      const tenantInfo = tenantMap.get(a.tenantPhone);
-      const propName = tenantInfo ? (propertyMap.get(tenantInfo.propertyId) ?? "") : "";
-      if (filterProperty !== "todos" && propName !== filterProperty) return false;
+  const filtered = useMemo(() =>
+    payments.filter((a) => {
+      const ti = tenantMap.get(a.tenantPhone);
+      const prop = ti ? (propertyMap.get(ti.propertyId) ?? "") : "";
+      if (filterProperty !== "todos" && prop !== filterProperty) return false;
       if (filterMonth !== "todos" && !a.createdAt.startsWith(filterMonth)) return false;
       if (filterStatus !== "todos" && statusGroup(a.status) !== filterStatus) return false;
       return true;
-    });
-  }, [payments, tenantMap, propertyMap, filterProperty, filterMonth, filterStatus]);
+    }),
+  [payments, tenantMap, propertyMap, filterProperty, filterMonth, filterStatus]);
 
-  const totalAmount = filtered.filter((a) => isCobrado(a.status)).reduce((acc, a) => acc + Number(a.ocrData?.monto ?? a.cepResponse?.monto ?? 0), 0);
-  const cobradoCount = filtered.filter((a) => isCobrado(a.status)).length;
+  const totalAmount    = filtered.filter((a) => isCobrado(a.status)).reduce((s, a) => s + Number(a.ocrData?.monto ?? a.cepResponse?.monto ?? 0), 0);
+  const cobradoCount   = filtered.filter((a) => isCobrado(a.status)).length;
   const pendienteCount = filtered.filter((a) => isPendiente(a.status)).length;
   const rechazadoCount = filtered.filter((a) => statusGroup(a.status) === "rechazado").length;
   const hasActiveFilters = filterProperty !== "todos" || filterMonth !== "todos" || filterStatus !== "todos";
+  const clearFilters = () => { setFilterProperty("todos"); setFilterMonth("todos"); setFilterStatus("todos"); };
 
-  if (paymentsState.error) {
-    return <ApiErrorState onRetry={() => window.location.reload()} />;
-  }
+  if (paymentsState.error) return <ApiErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <div className="space-y-5">
 
-      {/* ── Header ────────────────────────────────────────────────────── */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-[22px] font-bold text-[#0B1426] tracking-tight">Seguimiento de pagos</h1>
           <p className="text-sm text-slate-400 mt-0.5">Comprobantes recibidos y verificados vía WhatsApp</p>
         </div>
-        <Button variant="outline" size="sm" className="gap-2 text-slate-600 border-slate-200 hover:bg-slate-50">
-          <Download className="w-4 h-4" />
-          Exportar
+        <Button variant="outline" size="sm" className="gap-2 text-slate-600 border-slate-200">
+          <Download className="w-4 h-4" /> Exportar
         </Button>
       </div>
 
-      {/* ── Metric Cards ──────────────────────────────────────────────── */}
-      <div
-        className="bg-white rounded-2xl border border-slate-200/80 grid grid-cols-2 sm:grid-cols-4 overflow-hidden"
-        style={{ boxShadow: "0 2px 8px -2px rgba(0,0,0,0.06)" }}
-      >
-        {/* Total cobrado */}
-        <div className="px-5 sm:px-7 py-5 border-r border-b sm:border-b-0 border-slate-100">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400">Total cobrado</span>
-            <div className="w-7 h-7 rounded-lg bg-[#ecfdf5] flex items-center justify-center">
-              <TrendingUp className="w-3.5 h-3.5 text-[#047857]" />
+      {/* Hero stats */}
+      <div className="bg-[#0B1426] rounded-2xl overflow-hidden">
+        <div className="grid grid-cols-2 sm:grid-cols-4">
+          <div className="px-6 py-5 border-r border-b sm:border-b-0 border-white/[0.07]">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">Total cobrado</p>
+              <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+              </div>
             </div>
+            <p className="text-[22px] font-bold text-white leading-none tabular-nums">{formatCurrency(totalAmount)}</p>
+            <p className="text-[12px] text-slate-500 mt-1.5">{cobradoCount} verificado{cobradoCount !== 1 ? "s" : ""}</p>
           </div>
-          <p className="text-[24px] font-bold text-[#0B1426] leading-none tracking-tight">{formatMXN(totalAmount)}</p>
-          <p className="text-[12px] text-slate-400 mt-1.5">{cobradoCount} verificado{cobradoCount !== 1 ? "s" : ""}</p>
-        </div>
-
-        {/* Cobrados */}
-        <div className="px-5 sm:px-7 py-5 border-b sm:border-b-0 sm:border-r border-slate-100">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400">Cobrados</span>
-            <div className="w-7 h-7 rounded-lg bg-[#ecfdf5] flex items-center justify-center">
-              <CheckCircle2 className="w-3.5 h-3.5 text-[#047857]" />
+          <div className="px-6 py-5 border-b sm:border-b-0 sm:border-r border-white/[0.07]">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">Cobrados</p>
+              <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+              </div>
             </div>
+            <p className="text-[28px] font-bold text-emerald-400 leading-none">{cobradoCount}</p>
+            <p className="text-[12px] text-slate-500 mt-1.5">pagos verificados</p>
           </div>
-          <p className="text-[28px] font-bold text-[#047857] leading-none">{cobradoCount}</p>
-          <p className="text-[12px] text-slate-400 mt-1.5">pagos verificados</p>
-        </div>
-
-        {/* Pendientes */}
-        <div className="px-5 sm:px-7 py-5 border-r border-slate-100">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400">Pendientes</span>
-            <div className="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center">
-              <Clock className="w-3.5 h-3.5 text-amber-500" />
+          <div className="px-6 py-5 border-r border-white/[0.07]">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">Pendientes</p>
+              <div className="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                <Clock className="w-3.5 h-3.5 text-amber-400" />
+              </div>
             </div>
+            <p className="text-[28px] font-bold text-amber-400 leading-none">{pendienteCount}</p>
+            <p className="text-[12px] text-slate-500 mt-1.5">en proceso</p>
           </div>
-          <p className="text-[28px] font-bold text-amber-500 leading-none">{pendienteCount}</p>
-          <p className="text-[12px] text-slate-400 mt-1.5">en proceso</p>
-        </div>
-
-        {/* Rechazados */}
-        <div className="px-5 sm:px-7 py-5">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400">Revisión</span>
-            <div className="w-7 h-7 rounded-lg bg-red-50 flex items-center justify-center">
-              <XCircle className="w-3.5 h-3.5 text-red-400" />
+          <div className="px-6 py-5">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">Revisión</p>
+              <div className="w-7 h-7 rounded-lg bg-red-500/10 flex items-center justify-center">
+                <XCircle className="w-3.5 h-3.5 text-red-400" />
+              </div>
             </div>
+            <p className="text-[28px] font-bold text-red-400 leading-none">{rechazadoCount}</p>
+            <p className="text-[12px] text-slate-500 mt-1.5">no procesados</p>
           </div>
-          <p className="text-[28px] font-bold text-red-400 leading-none">{rechazadoCount}</p>
-          <p className="text-[12px] text-slate-400 mt-1.5">no procesados</p>
         </div>
       </div>
 
-      {/* ── Filters + Table ───────────────────────────────────────────── */}
+      {/* Table card */}
       <div
         className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden"
-        style={{ boxShadow: "0 2px 8px -2px rgba(0,0,0,0.06)" }}
+        style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
       >
         {/* Filter bar */}
         <div className="flex flex-wrap items-center gap-2.5 px-5 py-4 border-b border-slate-100 bg-slate-50/50">
@@ -210,10 +193,7 @@ export default function PagosPage() {
             </SelectContent>
           </Select>
           {hasActiveFilters && (
-            <button
-              onClick={() => { setFilterProperty("todos"); setFilterMonth("todos"); setFilterStatus("todos"); }}
-              className="h-8 px-3 text-[13px] text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
-            >
+            <button onClick={clearFilters} className="h-8 px-3 text-[13px] text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors">
               Limpiar
             </button>
           )}
@@ -223,16 +203,14 @@ export default function PagosPage() {
         </div>
 
         {/* Column headers */}
-        <div className="hidden sm:grid grid-cols-[1fr_140px_100px_160px_160px_110px_120px_48px] px-5 py-2.5 border-b border-slate-100">
+        <div className="hidden sm:grid grid-cols-[1fr_140px_100px_160px_160px_110px_120px_48px] px-5 py-2.5 border-b border-slate-100 bg-slate-50/60">
           {["Inquilino", "Propiedad", "Monto", "Fecha", "Clave rastreo", "Banco", "Estado", ""].map((h, i) => (
             <span key={i} className={cn(
               "text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400",
               i >= 2 && i < 6 && "text-right pr-4",
               i === 6 && "text-right pr-2",
               i === 7 && "text-center",
-            )}>
-              {h}
-            </span>
+            )}>{h}</span>
           ))}
         </div>
 
@@ -253,91 +231,65 @@ export default function PagosPage() {
             <Search className="w-8 h-8 text-slate-200" />
             <p className="text-[13px] text-slate-400">No hay pagos con los filtros seleccionados</p>
             {hasActiveFilters && (
-              <button
-                onClick={() => { setFilterProperty("todos"); setFilterMonth("todos"); setFilterStatus("todos"); }}
-                className="text-[13px] text-[#2952F3] hover:underline mt-1"
-              >
+              <button onClick={clearFilters} className="text-[13px] text-[#2952F3] hover:underline mt-1">
                 Limpiar filtros
               </button>
             )}
           </div>
-        ) : (
-          filtered.map((attempt, idx) => {
-            const tenantInfo = tenantMap.get(attempt.tenantPhone);
-            const propName = tenantInfo ? (propertyMap.get(tenantInfo.propertyId) ?? "—") : "—";
-            const amount = Number(attempt.ocrData?.monto ?? attempt.cepResponse?.monto ?? 0);
-            const name = tenantInfo?.name ?? attempt.tenantPhone;
-            const initials = name.split(" ").map((w: string) => w[0]).slice(0, 2).join("").toUpperCase();
+        ) : filtered.map((attempt) => {
+          const ti = tenantMap.get(attempt.tenantPhone);
+          const propName = ti ? (propertyMap.get(ti.propertyId) ?? "—") : "—";
+          const amount = Number(attempt.ocrData?.monto ?? attempt.cepResponse?.monto ?? 0);
+          const name = ti?.name ?? attempt.tenantPhone;
+          const ini = name.split(" ").map((w: string) => w[0]).slice(0, 2).join("").toUpperCase();
 
-            return (
-              <div
-                key={attempt.id}
-                className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60 transition-colors"
-              >
-                {/* Mobile */}
-                <div className="flex items-center justify-between px-4 py-3.5 sm:hidden">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-full bg-[#eef1fd] flex items-center justify-center text-[11px] font-bold text-[#2952F3] shrink-0">
-                      {initials}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-[13px] font-semibold text-[#0B1426] truncate">{name}</p>
-                      <p className="text-[11px] text-slate-400 truncate">{propName} · {format(new Date(attempt.createdAt), "dd/MM/yy")}</p>
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-1.5 shrink-0 ml-3">
-                    <span className="text-[13px] font-semibold text-[#0B1426] tabular-nums">
-                      {amount > 0 ? `$${amount.toLocaleString("es-MX")}` : "—"}
-                    </span>
-                    <StatusPill status={attempt.status} />
+          return (
+            <div key={attempt.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60 transition-colors">
+              {/* Mobile */}
+              <div className="flex items-center justify-between px-4 py-3.5 sm:hidden">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-full bg-[#eef1fd] flex items-center justify-center text-[11px] font-bold text-[#2952F3] shrink-0">{ini}</div>
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-semibold text-[#0B1426] truncate">{name}</p>
+                    <p className="text-[11px] text-slate-400">{propName} · {format(new Date(attempt.createdAt), "dd/MM/yy")}</p>
                   </div>
                 </div>
-
-                {/* Desktop */}
-                <div className="hidden sm:grid grid-cols-[1fr_140px_100px_160px_160px_110px_120px_48px] items-center px-5 py-3.5">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-full bg-[#eef1fd] flex items-center justify-center text-[11px] font-bold text-[#2952F3] shrink-0">
-                      {initials}
-                    </div>
-                    <p className="text-[13px] font-semibold text-[#0B1426] truncate">{name}</p>
-                  </div>
-                  <p className="text-[13px] text-slate-500 truncate pr-4">{propName}</p>
-                  <p className="text-[13px] font-semibold text-[#0B1426] text-right tabular-nums pr-4">
-                    {amount > 0 ? `$${amount.toLocaleString("es-MX")}` : "—"}
-                  </p>
-                  <p className="text-[12px] text-slate-400 text-right pr-4 tabular-nums">
-                    {format(new Date(attempt.createdAt), "dd MMM yyyy · HH:mm", { locale: es })}
-                  </p>
-                  <p className="text-[11px] font-mono text-slate-400 text-right pr-4 truncate">
-                    {(attempt.ocrData?.claveRastreo as string) ?? "—"}
-                  </p>
-                  <p className="text-[12px] text-slate-400 text-right pr-4">
-                    {(attempt.ocrData?.bancoEmisor as string) ?? "—"}
-                  </p>
-                  <div className="flex justify-end">
-                    <StatusPill status={attempt.status} />
-                  </div>
-                  <div className="flex justify-center">
-                    <Link href={`/pagos/${attempt.id}`}>
-                      <button className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-[#2952F3] hover:bg-[#eef1fd] transition-colors">
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </button>
-                    </Link>
-                  </div>
+                <div className="flex flex-col items-end gap-1.5 shrink-0 ml-3">
+                  <span className="text-[13px] font-semibold text-[#0B1426] tabular-nums">{amount > 0 ? formatCurrency(amount) : "—"}</span>
+                  <StatusPill status={attempt.status} />
                 </div>
               </div>
-            );
-          })
-        )}
+              {/* Desktop */}
+              <div className="hidden sm:grid grid-cols-[1fr_140px_100px_160px_160px_110px_120px_48px] items-center px-5 py-3.5">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-full bg-[#eef1fd] flex items-center justify-center text-[11px] font-bold text-[#2952F3] shrink-0">{ini}</div>
+                  <p className="text-[13px] font-semibold text-[#0B1426] truncate">{name}</p>
+                </div>
+                <p className="text-[13px] text-slate-500 truncate pr-4">{propName}</p>
+                <p className="text-[13px] font-semibold text-[#0B1426] text-right tabular-nums pr-4">{amount > 0 ? formatCurrency(amount) : "—"}</p>
+                <p className="text-[12px] text-slate-400 text-right pr-4 tabular-nums">{format(new Date(attempt.createdAt), "dd MMM yyyy · HH:mm", { locale: es })}</p>
+                <p className="text-[11px] font-mono text-slate-400 text-right pr-4 truncate">{(attempt.ocrData?.claveRastreo as string) ?? "—"}</p>
+                <p className="text-[12px] text-slate-400 text-right pr-4">{(attempt.ocrData?.bancoEmisor as string) ?? "—"}</p>
+                <div className="flex justify-end"><StatusPill status={attempt.status} /></div>
+                <div className="flex justify-center">
+                  <Link href={`/pagos/${attempt.id}`}>
+                    <button className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-[#2952F3] hover:bg-[#eef1fd] transition-colors">
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </button>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          );
+        })}
 
-        {/* Footer */}
         {filtered.length > 0 && !paymentsState.loading && (
-          <div className="flex items-center justify-between px-5 py-3 bg-slate-50/60 border-t border-slate-100">
+          <div className="flex items-center justify-between px-5 py-3.5 bg-slate-50/60 border-t border-slate-100">
             <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400">
               {filtered.length} movimiento{filtered.length !== 1 ? "s" : ""}
             </span>
-            <span className="text-[13px] font-semibold text-[#0B1426] tabular-nums">
-              Total cobrado · {formatMXN(totalAmount)}
+            <span className="text-[13px] font-bold text-[#0B1426] tabular-nums">
+              Total cobrado · {formatCurrency(totalAmount)}
             </span>
           </div>
         )}

@@ -3,22 +3,12 @@
 import { useEffect } from "react";
 import { format, addDays, setDate } from "date-fns";
 import { es } from "date-fns/locale";
-import { CheckCircle2, Send, BellOff, Loader2 } from "lucide-react";
+import { CheckCircle2, Send, BellOff, Loader2, Bell, Users, Clock } from "lucide-react";
 import { ApiErrorState } from "@/components/layout/ApiErrorState";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { useStore } from "@/store/useStore";
+import { cn } from "@/lib/utils";
 
 function getNextReminder(paymentDay: number, daysBefore: number): string {
   const today = new Date();
@@ -36,7 +26,11 @@ function getNextReminder(paymentDay: number, daysBefore: number): string {
 }
 
 export default function RecordatoriosPage() {
-  const { tenantsWithStatus, properties, settings, updateSettings, toggleReminderSent, fetchProperties, fetchTenants, fetchPayments, tenantsState, propertiesState } = useStore();
+  const {
+    tenantsWithStatus, properties, settings, updateSettings,
+    toggleReminderSent, fetchProperties, fetchTenants, fetchPayments,
+    tenantsState, propertiesState,
+  } = useStore();
 
   useEffect(() => {
     if (!properties.length) {
@@ -76,161 +70,147 @@ export default function RecordatoriosPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-[#0B1426]">Recordatorios</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Gestión de recordatorios de pago vía WhatsApp
-        </p>
-      </div>
+    <div className="space-y-5">
 
-      {/* Global Settings Card */}
-      <Card className="shadow-sm">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Configuración global de recordatorios</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <div className="flex items-center justify-between">
+      {/* Hero */}
+      <div
+        className="bg-[#0B1426] rounded-2xl overflow-hidden"
+        style={{ boxShadow: "0 4px 24px rgba(11,20,38,0.18)" }}
+      >
+        <div className="px-6 pt-5 pb-6">
+          <div className="flex items-center justify-between mb-5">
             <div>
-              <p className="text-sm font-medium">Recordatorios automáticos</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                El bot enviará recordatorios automáticamente vía WhatsApp
-              </p>
+              <h1 className="text-[22px] font-bold text-white tracking-tight">Recordatorios</h1>
+              <p className="text-[13px] text-white/40 mt-0.5">{currentMonthLabelCap}</p>
             </div>
-            <Switch
-              checked={settings.autoRemindersEnabled}
-              onCheckedChange={(checked) =>
-                updateSettings({ autoRemindersEnabled: checked })
-              }
-            />
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">
-                Días de anticipación por defecto
-              </label>
-              <div className="flex items-center gap-2">
-                <Input
-                  type="number"
-                  min={1}
-                  max={15}
-                  className="w-20"
-                  value={settings.defaultReminderDays}
-                  onChange={(e) =>
-                    updateSettings({
-                      defaultReminderDays: parseInt(e.target.value) || 3,
-                    })
-                  }
-                />
-                <span className="text-sm text-muted-foreground">
-                  días antes del vencimiento
-                </span>
-              </div>
-            </div>
+            {isLoading && <Loader2 className="w-5 h-5 text-white/30 animate-spin" />}
           </div>
 
-          <div className="flex gap-4 pt-2 border-t">
-            <div className="text-center">
-              <p className="text-2xl font-bold text-[#2952F3]">{sentCount}</p>
-              <p className="text-xs text-muted-foreground">Enviados este mes</p>
+          {/* Stats */}
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            <div className="bg-white/5 rounded-xl px-4 py-3">
+              <div className="flex items-center gap-1.5 mb-1">
+                <CheckCircle2 className="w-3.5 h-3.5 text-white/40" />
+                <p className="text-[11px] text-white/40 uppercase tracking-widest font-semibold">Enviados</p>
+              </div>
+              <p className="text-[24px] font-bold text-white leading-none">{sentCount}</p>
+              <p className="text-[12px] text-white/40 mt-1">este mes</p>
             </div>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-amber-600">
+            <div className="bg-white/5 rounded-xl px-4 py-3">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Clock className="w-3.5 h-3.5 text-white/40" />
+                <p className="text-[11px] text-white/40 uppercase tracking-widest font-semibold">Pendientes</p>
+              </div>
+              <p className={cn("text-[24px] font-bold leading-none", pendingReminderCount > 0 ? "text-amber-400" : "text-white")}>
                 {pendingReminderCount}
               </p>
-              <p className="text-xs text-muted-foreground">Pendientes de envío</p>
+              <p className="text-[12px] text-white/40 mt-1">por enviar</p>
             </div>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-slate-700">
-                {tenantsWithStatus.length}
-              </p>
-              <p className="text-xs text-muted-foreground">Total inquilinos</p>
+            <div className="bg-white/5 rounded-xl px-4 py-3">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Users className="w-3.5 h-3.5 text-white/40" />
+                <p className="text-[11px] text-white/40 uppercase tracking-widest font-semibold">Total</p>
+              </div>
+              <p className="text-[24px] font-bold text-white leading-none">{tenantsWithStatus.length}</p>
+              <p className="text-[12px] text-white/40 mt-1">inquilinos</p>
             </div>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Tenants reminder table */}
-      <Card className="shadow-sm">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">
-            Estado de recordatorios — {currentMonthLabelCap}
-            {isLoading && <Loader2 className="inline w-4 h-4 ml-2 animate-spin text-slate-400" />}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="pl-6">Nombre</TableHead>
-                <TableHead>Propiedad</TableHead>
-                <TableHead>Día de pago</TableHead>
-                <TableHead>Días anticipación</TableHead>
-                <TableHead>Próximo recordatorio</TableHead>
-                <TableHead>Último recordatorio</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead className="pr-6">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {tenantRows.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center py-10 text-sm text-muted-foreground">
-                    {isLoading ? "Cargando inquilinos…" : "No hay inquilinos registrados"}
-                  </TableCell>
-                </TableRow>
-              )}
-              {tenantRows.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell className="pl-6 font-medium">{row.name}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {row.propertyName}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Badge variant="outline" className="text-xs">
-                      Día {row.paymentDay}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-center text-sm text-muted-foreground">
-                    {row.daysBefore} días
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {row.nextReminder}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {row.reminderSent ? format(new Date(), "dd/MM/yyyy") : "—"}
-                  </TableCell>
-                  <TableCell>
-                    {row.reminderSent ? (
-                      <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100 border-blue-200">
-                        <CheckCircle2 className="w-3 h-3 mr-1" />
-                        Enviado
-                      </Badge>
-                    ) : (
-                      <Badge className="bg-slate-100 text-slate-600 hover:bg-slate-100 border-slate-200">
-                        <BellOff className="w-3 h-3 mr-1" />
-                        No enviado
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="pr-6">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-[#2952F3] hover:text-[#1e3fd4] hover:bg-[#eef1fd] text-xs"
-                      disabled={row.paymentStatus === "Pagado"}
-                      onClick={() => toggleReminderSent(row.id)}
-                    >
-                      <Send className="w-3 h-3 mr-1.5" />
-                      {row.reminderSent ? "Desmarcar" : "Enviar ahora"}
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+          {/* Settings row */}
+          <div className="bg-white/5 rounded-xl px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="flex items-center justify-between flex-1 gap-4">
+              <div>
+                <p className="text-[13px] font-semibold text-white">Recordatorios automáticos</p>
+                <p className="text-[12px] text-white/40 mt-0.5">El bot enviará recordatorios vía WhatsApp</p>
+              </div>
+              <Switch
+                checked={settings.autoRemindersEnabled}
+                onCheckedChange={(checked) => updateSettings({ autoRemindersEnabled: checked })}
+              />
+            </div>
+            <div className="hidden sm:block h-8 w-px bg-white/10" />
+            <div className="flex items-center gap-3 shrink-0">
+              <p className="text-[13px] text-white/60 whitespace-nowrap">Días de anticipación</p>
+              <Input
+                type="number"
+                min={1}
+                max={15}
+                className="w-16 h-8 bg-white/10 border-white/20 text-white text-center text-[13px]"
+                value={settings.defaultReminderDays}
+                onChange={(e) => updateSettings({ defaultReminderDays: parseInt(e.target.value) || 3 })}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Tabla de inquilinos */}
+      <div
+        className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden"
+        style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
+      >
+        <div className="px-6 py-4 border-b border-slate-100">
+          <p className="text-[14px] font-semibold text-[#0B1426]">Estado de recordatorios — {currentMonthLabelCap}</p>
+        </div>
+
+        {/* Header row */}
+        <div className="grid grid-cols-[1fr_110px_80px_70px_110px_100px_130px] gap-x-3 px-6 py-2.5 border-b border-slate-100 bg-slate-50/50">
+          {["Nombre", "Propiedad", "Día pago", "Anticip.", "Próx. recordatorio", "Estado", "Acción"].map((h) => (
+            <p key={h} className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest">{h}</p>
+          ))}
+        </div>
+
+        <div className="divide-y divide-slate-100">
+          {tenantRows.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-14 text-center">
+              {isLoading
+                ? <Loader2 className="w-6 h-6 text-slate-300 animate-spin mb-2" />
+                : <Bell className="w-7 h-7 text-slate-300 mb-2" />}
+              <p className="text-[13px] text-slate-400">
+                {isLoading ? "Cargando inquilinos…" : "No hay inquilinos registrados"}
+              </p>
+            </div>
+          )}
+
+          {tenantRows.map((row) => (
+            <div key={row.id} className="grid grid-cols-[1fr_110px_80px_70px_110px_100px_130px] gap-x-3 items-center px-6 py-3.5">
+              <p className="text-[13px] font-medium text-[#0B1426] truncate">{row.name}</p>
+              <p className="text-[12px] text-slate-400 truncate">{row.propertyName}</p>
+              <div>
+                <span className="text-[11px] font-semibold text-slate-600 bg-slate-100 border border-slate-200 rounded-full px-2 py-0.5 whitespace-nowrap">
+                  Día {row.paymentDay}
+                </span>
+              </div>
+              <p className="text-[12px] text-slate-500">{row.daysBefore}d</p>
+              <p className="text-[12px] text-slate-500 font-mono">{row.nextReminder}</p>
+              <div>
+                {row.reminderSent ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5">
+                    <CheckCircle2 className="w-3 h-3" /> Enviado
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 bg-slate-100 border border-slate-200 rounded-full px-2 py-0.5">
+                    <BellOff className="w-3 h-3" /> No enviado
+                  </span>
+                )}
+              </div>
+              <button
+                className={cn(
+                  "inline-flex items-center gap-1.5 text-[12px] font-medium px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap",
+                  row.paymentStatus === "Pagado"
+                    ? "text-slate-300 cursor-not-allowed"
+                    : "text-[#2952F3] hover:bg-[#eef1fd]"
+                )}
+                disabled={row.paymentStatus === "Pagado"}
+                onClick={() => toggleReminderSent(row.id)}
+              >
+                <Send className="w-3.5 h-3.5" />
+                {row.reminderSent ? "Desmarcar" : "Enviar ahora"}
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

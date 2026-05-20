@@ -9,23 +9,33 @@ const ACCOUNT_TYPE_LABEL: Record<string, string> = {
 };
 import { useParams, notFound } from "next/navigation";
 import { format } from "date-fns";
-import { ArrowLeft, Plus, Pencil, Trash2, CheckCircle2, Bell, BellOff, Save, X, AlertCircle, CalendarDays, Banknote } from "lucide-react";
+import { ArrowLeft, Plus, Pencil, Trash2, CheckCircle2, Bell, BellOff, Save, X, CalendarDays, Banknote, Users, Building2, AlertTriangle } from "lucide-react";
 import Link from "next/link";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useStore } from "@/store/useStore";
-import { formatPhone } from "@/lib/utils";
+import { cn, formatPhone, formatCurrency } from "@/lib/utils";
 import type { AccountType, PaymentStatus } from "@/lib/types";
 
-function PaymentStatusBadge({ status }: { status: PaymentStatus }) {
-  if (status === "Pagado") return <Badge className="bg-[#d1fae5] text-[#065f46] hover:bg-[#d1fae5] border-[#6ee7b7]"><CheckCircle2 className="w-3 h-3 mr-1" />Pagado</Badge>;
-  if (status === "Vencido") return <Badge className="bg-red-100 text-red-800 hover:bg-red-100 border-red-200"><X className="w-3 h-3 mr-1" />Vencido</Badge>;
-  if (status === "Revisión") return <Badge className="bg-purple-100 text-purple-800 hover:bg-purple-100 border-purple-200">Revisión</Badge>;
-  return <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100 border-amber-200">Pendiente</Badge>;
+function StatusPill({ status }: { status: PaymentStatus }) {
+  const map: Record<PaymentStatus, string> = {
+    Pagado:    "bg-emerald-50 border-emerald-200 text-emerald-700",
+    Pendiente: "bg-amber-50 border-amber-200 text-amber-600",
+    Vencido:   "bg-red-50 border-red-200 text-red-600",
+    Revisión:  "bg-purple-50 border-purple-200 text-purple-600",
+  };
+  const dot: Record<PaymentStatus, string> = {
+    Pagado: "bg-emerald-500", Pendiente: "bg-amber-400 animate-pulse",
+    Vencido: "bg-red-500 animate-pulse", Revisión: "bg-purple-500",
+  };
+  return (
+    <span className={cn("inline-flex items-center gap-1.5 border text-[11px] font-semibold px-2.5 py-[3px] rounded-full whitespace-nowrap", map[status])}>
+      <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", dot[status])} />
+      {status}
+    </span>
+  );
 }
 
 function AddTenantDialog({ open, propertyId, onClose }: { open: boolean; propertyId: number; onClose: () => void }) {
@@ -85,7 +95,7 @@ function AddTenantDialog({ open, propertyId, onClose }: { open: boolean; propert
             </div>
           </div>
           <div className="space-y-3 pt-1 border-t">
-            <p className="text-xs text-muted-foreground">Cuenta destino individual (opcional — sobreescribe la del arrendador)</p>
+            <p className="text-xs text-slate-400">Cuenta destino individual (opcional — sobreescribe la del arrendador)</p>
             <div className="space-y-1.5">
               <label className="text-sm font-medium">Tipo de cuenta</label>
               <Select value={form.destinationAccountType} onValueChange={(v) => setForm({ ...form, destinationAccountType: (v ?? "CLABE") as AccountType })}>
@@ -151,161 +161,233 @@ export default function PropertyDetailPage() {
   };
 
   const paidCount = propertyTenants.filter((t) => t.paymentStatus === "Pagado").length;
+  const monthlyTotal = propertyTenants.reduce((s, t) => s + (t.monthlyAmount ? Number(t.monthlyAmount) : 0), 0);
+  const hasAlert = propertyTenants.some((t) => t.paymentStatus === "Vencido" || t.paymentStatus === "Revisión");
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Link href="/propiedades">
-          <Button variant="ghost" size="icon" className="shrink-0"><ArrowLeft className="w-4 h-4" /></Button>
-        </Link>
-        <div className="flex-1 min-w-0">
-          <h1 className="text-2xl font-bold text-slate-900 truncate">{property.name}</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {propertyTenants.length === 0 ? "Sin inquilino asignado" : propertyTenants[0].name}
-          </p>
-        </div>
-        {!editing ? (
-          <Button variant="outline" size="sm" onClick={() => { setEditForm({ name: property.name }); setEditing(true); }}>
-            <Pencil className="w-4 h-4 mr-1.5" />Editar
-          </Button>
-        ) : (
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setEditing(false)}>Cancelar</Button>
-            <Button size="sm" className="bg-[#2952F3] hover:bg-[#1e3fd4]" onClick={handleSave}><Save className="w-4 h-4 mr-1.5" />Guardar</Button>
-          </div>
-        )}
-      </div>
+    <div className="space-y-5">
 
-      <Card className="shadow-sm">
-        <CardHeader className="pb-3"><CardTitle className="text-base">Información de la propiedad</CardTitle></CardHeader>
-        <CardContent>
-          {editing ? (
-            <div className="max-w-xs">
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium">Nombre</label>
-                <Input value={editForm.name} onChange={(e) => setEditForm({ name: e.target.value })} />
+      {/* Hero */}
+      <div
+        className="bg-[#0B1426] rounded-2xl overflow-hidden"
+        style={{ boxShadow: "0 4px 24px rgba(11,20,38,0.18)" }}
+      >
+        <div className="px-6 pt-5 pb-6">
+          <div className="flex items-start justify-between gap-3 mb-5">
+            <div className="flex items-center gap-3">
+              <Link href="/propiedades">
+                <button className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
+                  <ArrowLeft className="w-4 h-4 text-white" />
+                </button>
+              </Link>
+              <div>
+                {!editing ? (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <Building2 className="w-3.5 h-3.5 text-white/40" />
+                      <p className="text-[11px] text-white/40 uppercase tracking-widest font-semibold">Propiedad</p>
+                    </div>
+                    <h1 className="text-[22px] font-bold text-white mt-0.5 leading-tight">{property.name}</h1>
+                  </>
+                ) : (
+                  <div className="mt-1">
+                    <Input
+                      value={editForm.name}
+                      onChange={(e) => setEditForm({ name: e.target.value })}
+                      className="bg-white/10 border-white/20 text-white placeholder:text-white/40 h-9 w-56"
+                    />
+                  </div>
+                )}
               </div>
             </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">La cuenta destino se configura en el perfil del arrendador.</p>
-          )}
-        </CardContent>
-      </Card>
+            <div className="flex gap-2 shrink-0">
+              {!editing ? (
+                <button
+                  onClick={() => { setEditForm({ name: property.name }); setEditing(true); }}
+                  className="flex items-center gap-1.5 h-8 px-3 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[12px] font-medium transition-colors"
+                >
+                  <Pencil className="w-3.5 h-3.5" /> Editar
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setEditing(false)}
+                    className="flex items-center gap-1.5 h-8 px-3 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[12px] font-medium transition-colors"
+                  >
+                    <X className="w-3.5 h-3.5" /> Cancelar
+                  </button>
+                  <button
+                    onClick={handleSave}
+                    className="flex items-center gap-1.5 h-8 px-3 rounded-lg bg-[#2952F3] hover:bg-[#1e3fd4] text-white text-[12px] font-medium transition-colors"
+                  >
+                    <Save className="w-3.5 h-3.5" /> Guardar
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
 
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-[#0B1426]">
-            Inquilinos
-            <span className="ml-2 text-sm font-normal text-slate-400">({propertyTenants.length})</span>
-          </h2>
-          <Button size="sm" className="bg-[#2952F3] hover:bg-[#1e3fd4]" onClick={() => setAddTenantOpen(true)}>
-            <Plus className="w-4 h-4 mr-1.5" />Agregar inquilino
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-white/5 rounded-xl px-4 py-3">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Users className="w-3.5 h-3.5 text-white/40" />
+                <p className="text-[11px] text-white/40 uppercase tracking-widest font-semibold">Inquilinos</p>
+              </div>
+              <p className="text-[22px] font-bold text-white leading-none">{propertyTenants.length}</p>
+              <p className="text-[12px] text-white/40 mt-1">{paidCount} al corriente</p>
+            </div>
+            <div className="bg-white/5 rounded-xl px-4 py-3">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Banknote className="w-3.5 h-3.5 text-white/40" />
+                <p className="text-[11px] text-white/40 uppercase tracking-widest font-semibold">Renta mensual</p>
+              </div>
+              <p className="text-[22px] font-bold text-white leading-none tabular-nums">
+                {monthlyTotal > 0 ? formatCurrency(monthlyTotal).replace(/\.\d+$/, "") : "—"}
+              </p>
+              <p className="text-[12px] text-white/40 mt-1">esperado por mes</p>
+            </div>
+            <div className="bg-white/5 rounded-xl px-4 py-3">
+              <div className="flex items-center gap-1.5 mb-1">
+                <CheckCircle2 className="w-3.5 h-3.5 text-white/40" />
+                <p className="text-[11px] text-white/40 uppercase tracking-widest font-semibold">Estado</p>
+              </div>
+              <p className={cn("text-[22px] font-bold leading-none",
+                hasAlert ? "text-red-400"
+                : paidCount === propertyTenants.length && propertyTenants.length > 0 ? "text-emerald-400"
+                : "text-amber-400"
+              )}>
+                {hasAlert ? "Alertas" : paidCount === propertyTenants.length && propertyTenants.length > 0 ? "Al día" : "Pendiente"}
+              </p>
+              <p className="text-[12px] text-white/40 mt-1">
+                {hasAlert ? "requiere atención" : "sin urgencias"}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Tenants header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-[16px] font-semibold text-[#0B1426]">Inquilinos</h2>
+          <p className="text-[12px] text-slate-400 mt-0.5">{propertyTenants.length} registrado{propertyTenants.length !== 1 ? "s" : ""}</p>
+        </div>
+        <Button size="sm" className="bg-[#2952F3] hover:bg-[#1e3fd4] gap-1.5" onClick={() => setAddTenantOpen(true)}>
+          <Plus className="w-4 h-4" /> Agregar inquilino
+        </Button>
+      </div>
+
+      {tenantsState.error && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl">
+          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+          <p className="text-[13px] text-amber-800 font-medium">Algo salió mal al cargar los datos. Intenta de nuevo.</p>
+        </div>
+      )}
+
+      {propertyTenants.length === 0 ? (
+        <div
+          className="flex flex-col items-center justify-center py-16 bg-white rounded-2xl border border-slate-200/80 text-center"
+          style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}
+        >
+          <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
+            <Users className="w-5 h-5 text-slate-400" />
+          </div>
+          <p className="text-[15px] font-semibold text-[#0B1426]">Sin inquilinos</p>
+          <p className="text-[13px] text-slate-400 mt-1 mb-5">Agrega el primer inquilino a esta propiedad</p>
+          <Button size="sm" className="bg-[#2952F3] hover:bg-[#1e3fd4] gap-1.5" onClick={() => setAddTenantOpen(true)}>
+            <Plus className="w-4 h-4" /> Agregar inquilino
           </Button>
         </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {propertyTenants.map((tenant) => {
+            const initials = tenant.name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+            return (
+              <div
+                key={tenant.id}
+                className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden"
+                style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
+              >
+                <div className={cn("h-1",
+                  tenant.paymentStatus === "Pagado" ? "bg-emerald-500"
+                  : tenant.paymentStatus === "Vencido" ? "bg-red-400"
+                  : tenant.paymentStatus === "Revisión" ? "bg-purple-400"
+                  : "bg-amber-400"
+                )} />
 
-        {tenantsState.error && (
-          <div className="flex items-center gap-2 px-4 py-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg">
-            <AlertCircle className="w-4 h-4 shrink-0" />{tenantsState.error}
-          </div>
-        )}
-
-        {propertyTenants.length === 0 ? (
-          <div
-            className="flex flex-col items-center justify-center py-12 bg-white rounded-2xl border border-slate-200/80 text-center"
-            style={{ boxShadow: "0 2px 8px -2px rgba(0,0,0,0.06)" }}
-          >
-            <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-3">
-              <Plus className="w-5 h-5 text-slate-400" />
-            </div>
-            <p className="text-sm font-medium text-slate-600">Sin inquilinos</p>
-            <p className="text-xs text-slate-400 mt-0.5">Agrega el primer inquilino a esta propiedad</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {propertyTenants.map((tenant) => {
-              const initials = tenant.name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
-              return (
-                <div
-                  key={tenant.id}
-                  className="bg-white rounded-2xl border border-slate-200/80 p-5 flex flex-col gap-4"
-                  style={{ boxShadow: "0 2px 8px -2px rgba(0,0,0,0.06)" }}
-                >
-                  {/* Header: avatar + name + status */}
+                <div className="p-5 flex flex-col gap-4">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-10 h-10 rounded-full bg-[#eef1fd] flex items-center justify-center text-sm font-bold text-[#2952F3] shrink-0">
                         {initials}
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-[#0B1426] truncate">{tenant.name}</p>
-                        <p className="text-xs text-slate-400 font-mono mt-0.5">{formatPhone(tenant.phone)}</p>
+                        <p className="text-[14px] font-semibold text-[#0B1426] truncate">{tenant.name}</p>
+                        <p className="text-[12px] text-slate-400 font-mono mt-0.5">{formatPhone(tenant.phone)}</p>
                       </div>
                     </div>
-                    <PaymentStatusBadge status={tenant.paymentStatus} />
+                    <StatusPill status={tenant.paymentStatus} />
                   </div>
 
-                  {/* Details */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="flex items-center gap-2">
-                      <CalendarDays className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <div>
-                        <p className="text-[10px] text-slate-400 uppercase tracking-wide">Día de pago</p>
-                        <p className="text-sm font-medium text-[#0B1426]">
-                          {tenant.paymentDay ? `Día ${tenant.paymentDay}` : "—"}
-                        </p>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div className="bg-slate-50 rounded-xl p-3">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <CalendarDays className="w-3 h-3 text-slate-400" />
+                        <p className="text-[10px] text-slate-400 uppercase tracking-wide font-semibold">Día de pago</p>
                       </div>
+                      <p className="text-[14px] font-semibold text-[#0B1426]">
+                        {tenant.paymentDay ? `Día ${tenant.paymentDay}` : "—"}
+                      </p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Banknote className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <div>
-                        <p className="text-[10px] text-slate-400 uppercase tracking-wide">Renta</p>
-                        <p className="text-sm font-medium text-[#0B1426]">
-                          {tenant.monthlyAmount ? `$${Number(tenant.monthlyAmount).toLocaleString("es-MX")}` : "—"}
-                        </p>
+                    <div className="bg-slate-50 rounded-xl p-3">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <Banknote className="w-3 h-3 text-slate-400" />
+                        <p className="text-[10px] text-slate-400 uppercase tracking-wide font-semibold">Renta</p>
                       </div>
+                      <p className="text-[14px] font-semibold text-[#0B1426]">
+                        {tenant.monthlyAmount ? `$${Number(tenant.monthlyAmount).toLocaleString("es-MX")}` : "—"}
+                      </p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <div>
-                        <p className="text-[10px] text-slate-400 uppercase tracking-wide">Último pago</p>
-                        <p className="text-sm font-medium text-[#0B1426]">
-                          {tenant.lastPaymentDate
-                            ? format(new Date(tenant.lastPaymentDate + "T12:00:00"), "dd/MM/yyyy")
-                            : "—"}
-                        </p>
+                    <div className="bg-slate-50 rounded-xl p-3">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <CheckCircle2 className="w-3 h-3 text-slate-400" />
+                        <p className="text-[10px] text-slate-400 uppercase tracking-wide font-semibold">Último pago</p>
                       </div>
+                      <p className="text-[14px] font-semibold text-[#0B1426]">
+                        {tenant.lastPaymentDate
+                          ? format(new Date(tenant.lastPaymentDate + "T12:00:00"), "dd/MM/yyyy")
+                          : "—"}
+                      </p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {tenant.reminderSent
-                        ? <Bell className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                        : <BellOff className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
-                      <div>
-                        <p className="text-[10px] text-slate-400 uppercase tracking-wide">Recordatorio</p>
-                        <p className={`text-sm font-medium ${tenant.reminderSent ? "text-blue-600" : "text-slate-400"}`}>
-                          {tenant.reminderSent ? "Enviado" : "No enviado"}
-                        </p>
+                    <div className="bg-slate-50 rounded-xl p-3">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        {tenant.reminderSent
+                          ? <Bell className="w-3 h-3 text-[#2952F3]" />
+                          : <BellOff className="w-3 h-3 text-slate-400" />}
+                        <p className="text-[10px] text-slate-400 uppercase tracking-wide font-semibold">Recordatorio</p>
                       </div>
+                      <p className={cn("text-[14px] font-semibold", tenant.reminderSent ? "text-[#2952F3]" : "text-slate-400")}>
+                        {tenant.reminderSent ? "Enviado" : "No enviado"}
+                      </p>
                     </div>
                   </div>
 
-                  {/* Footer: delete */}
                   <div className="pt-1 border-t border-slate-100 flex justify-end">
-                    <Button
-                      variant="ghost" size="sm"
-                      className="text-red-500 hover:text-red-700 hover:bg-red-50 text-xs h-7 px-2"
+                    <button
+                      className="flex items-center gap-1 text-[12px] text-red-500 hover:text-red-700 font-medium px-2 py-1 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50"
                       onClick={() => setConfirmDeleteId(tenant.id)}
                       disabled={deletingId === tenant.id}
                     >
-                      <Trash2 className="w-3.5 h-3.5 mr-1" />
+                      <Trash2 className="w-3.5 h-3.5" />
                       {deletingId === tenant.id ? "Eliminando..." : "Eliminar"}
-                    </Button>
+                    </button>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <AddTenantDialog open={addTenantOpen} propertyId={id} onClose={() => setAddTenantOpen(false)} />
 
@@ -314,13 +396,11 @@ export default function PropertyDetailPage() {
           <DialogHeader>
             <DialogTitle>¿Eliminar inquilino?</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-slate-500">
             Esta acción eliminará al inquilino de la propiedad. No se puede deshacer.
           </p>
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setConfirmDeleteId(null)}>
-              Cancelar
-            </Button>
+            <Button variant="outline" onClick={() => setConfirmDeleteId(null)}>Cancelar</Button>
             <Button
               variant="destructive"
               disabled={deletingId !== null}
