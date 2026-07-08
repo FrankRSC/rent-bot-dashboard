@@ -11,14 +11,17 @@ import {
   Settings,
   Zap,
   X,
+  Receipt,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { useStore } from "@/store/useStore";
 
-const navItems = [
+const BASE_NAV = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Propiedades", href: "/propiedades", icon: Building2 },
   { label: "Pagos", href: "/pagos", icon: CreditCard },
+  { label: "Facturas", href: "/facturas", icon: Receipt, feature: "facturasEnabled" as const },
   { label: "Reportes", href: "/reportes", icon: BarChart2 },
   { label: "Recordatorios", href: "/recordatorios", icon: Bell },
   { label: "Configuración", href: "/configuracion", icon: Settings },
@@ -31,6 +34,11 @@ interface SidebarProps {
 
 export function Sidebar({ open, onClose }: SidebarProps) {
   const pathname = usePathname();
+  const { settings } = useStore();
+
+  const navItems = BASE_NAV.filter(
+    (item) => !item.feature || settings[item.feature]
+  );
 
   return (
     <aside

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Pencil, Save, X, Wifi, WifiOff, Bell, BellOff, CheckCircle2, CreditCard, User, Settings2 } from "lucide-react";
+import { Pencil, Save, X, Wifi, WifiOff, Bell, BellOff, CheckCircle2, CreditCard, User, Settings2, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -46,6 +46,15 @@ export default function ConfiguracionPage() {
     beneficiaryAccountType: (settings.beneficiaryAccountType || "CLABE") as AccountType,
   });
 
+  const [editingFiscal, setEditingFiscal] = useState(false);
+  const [savingFiscal, setSavingFiscal] = useState(false);
+  const [fiscalForm, setFiscalForm] = useState({
+    rfc: settings.rfc,
+    fiscalName: settings.fiscalName,
+    zipCode: settings.zipCode,
+    taxRegime: settings.taxRegime,
+  });
+
   useEffect(() => {
     api.getLandlord(LANDLORD_ID).then((landlord) => {
       const data = {
@@ -55,9 +64,27 @@ export default function ConfiguracionPage() {
         ownerBank: landlord.ownerBank ?? "",
         beneficiaryAccount: landlord.beneficiaryAccount ?? "",
         beneficiaryAccountType: (landlord.beneficiaryAccountType ?? "CLABE") as AccountType,
+        rfc: landlord.rfc ?? "",
+        fiscalName: landlord.fiscalName ?? "",
+        zipCode: landlord.zipCode ?? "",
+        taxRegime: landlord.taxRegime ?? "",
+        facturasEnabled: landlord.facturasEnabled ?? false,
       };
       updateSettings(data);
-      setProfileForm(data);
+      setProfileForm({
+        landlordName: data.landlordName,
+        email: data.email,
+        phone: data.phone,
+        ownerBank: data.ownerBank,
+        beneficiaryAccount: data.beneficiaryAccount,
+        beneficiaryAccountType: data.beneficiaryAccountType,
+      });
+      setFiscalForm({
+        rfc: data.rfc,
+        fiscalName: data.fiscalName,
+        zipCode: data.zipCode,
+        taxRegime: data.taxRegime,
+      });
     }).catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -79,6 +106,21 @@ export default function ConfiguracionPage() {
       setEditingProfile(false);
     } catch { /* silenciado */ }
     finally { setSaving(false); }
+  };
+
+  const handleSaveFiscal = async () => {
+    setSavingFiscal(true);
+    try {
+      await api.updateLandlordFiscal(LANDLORD_ID, {
+        rfc: fiscalForm.rfc,
+        taxRegime: fiscalForm.taxRegime,
+        zipCode: fiscalForm.zipCode,
+        fiscalName: fiscalForm.fiscalName || undefined,
+      });
+      updateSettings(fiscalForm);
+      setEditingFiscal(false);
+    } catch { /* silenciado */ }
+    finally { setSavingFiscal(false); }
   };
 
   return (
@@ -263,6 +305,97 @@ export default function ConfiguracionPage() {
               <Switch checked={settings[key] as boolean} onCheckedChange={(c) => updateSettings({ [key]: c })} />
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Datos fiscales */}
+      <div
+        className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden"
+        style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-[#eef1fd] flex items-center justify-center shrink-0">
+              <FileText className="w-4 h-4 text-[#2952F3]" />
+            </div>
+            <div>
+              <p className="text-[14px] font-semibold text-[#0B1426]">Datos fiscales para facturación</p>
+              <p className="text-[12px] text-slate-400">RFC y régimen fiscal del arrendador (CFDI 4.0)</p>
+            </div>
+          </div>
+          {!editingFiscal ? (
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => {
+              setFiscalForm({ rfc: settings.rfc, fiscalName: settings.fiscalName, zipCode: settings.zipCode, taxRegime: settings.taxRegime });
+              setEditingFiscal(true);
+            }}>
+              <Pencil className="w-3.5 h-3.5" /> Editar
+            </Button>
+          ) : (
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setEditingFiscal(false)} disabled={savingFiscal}>
+                <X className="w-3.5 h-3.5 mr-1" /> Cancelar
+              </Button>
+              <Button size="sm" className="bg-[#2952F3] hover:bg-[#1e3fd4] gap-1.5" onClick={handleSaveFiscal} disabled={savingFiscal}>
+                <Save className="w-3.5 h-3.5" /> {savingFiscal ? "Guardando..." : "Guardar"}
+              </Button>
+            </div>
+          )}
+        </div>
+        <div className="flex items-center justify-between px-6 py-3 bg-slate-50/60 border-b border-slate-100">
+          <div>
+            <p className="text-[13px] font-medium text-[#0B1426]">Módulo de facturación activo</p>
+            <p className="text-[12px] text-slate-400">Muestra la sección Facturas en el menú lateral</p>
+          </div>
+          <Switch
+            checked={settings.facturasEnabled}
+            onCheckedChange={async (c) => {
+              updateSettings({ facturasEnabled: c });
+              await api.updateLandlord(LANDLORD_ID, { facturasEnabled: c }).catch(() => {
+                updateSettings({ facturasEnabled: !c });
+              });
+            }}
+          />
+        </div>
+        <div className="p-6">
+          {!editingFiscal ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <p className="text-[11px] text-slate-400 mb-0.5 uppercase tracking-wide font-semibold">RFC</p>
+                <p className="text-[14px] font-mono font-medium text-[#0B1426]">{settings.rfc || "—"}</p>
+              </div>
+              <div>
+                <p className="text-[11px] text-slate-400 mb-0.5 uppercase tracking-wide font-semibold">Nombre fiscal</p>
+                <p className="text-[14px] font-medium text-[#0B1426]">{settings.fiscalName || "—"}</p>
+              </div>
+              <div>
+                <p className="text-[11px] text-slate-400 mb-0.5 uppercase tracking-wide font-semibold">Código postal</p>
+                <p className="text-[14px] font-medium text-[#0B1426]">{settings.zipCode || "—"}</p>
+              </div>
+              <div>
+                <p className="text-[11px] text-slate-400 mb-0.5 uppercase tracking-wide font-semibold">Régimen fiscal</p>
+                <p className="text-[14px] font-medium text-[#0B1426]">{settings.taxRegime || "—"}</p>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-[13px] font-medium text-slate-700">RFC</label>
+                <Input placeholder="XAXX010101000" value={fiscalForm.rfc} onChange={(e) => setFiscalForm({ ...fiscalForm, rfc: e.target.value })} className="font-mono" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[13px] font-medium text-slate-700">Nombre fiscal</label>
+                <Input placeholder="Como aparece ante el SAT" value={fiscalForm.fiscalName} onChange={(e) => setFiscalForm({ ...fiscalForm, fiscalName: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[13px] font-medium text-slate-700">Código postal</label>
+                <Input placeholder="5 dígitos" value={fiscalForm.zipCode} onChange={(e) => setFiscalForm({ ...fiscalForm, zipCode: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[13px] font-medium text-slate-700">Régimen fiscal</label>
+                <Input placeholder="Ej. 621 - Actividades Empresariales" value={fiscalForm.taxRegime} onChange={(e) => setFiscalForm({ ...fiscalForm, taxRegime: e.target.value })} />
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

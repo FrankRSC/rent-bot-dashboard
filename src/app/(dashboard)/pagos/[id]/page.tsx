@@ -10,24 +10,7 @@ import { Button } from "@/components/ui/button";
 import * as api from "@/lib/api";
 import type { PaymentAttempt, AttemptStatus, EventType } from "@/lib/types";
 import { cn } from "@/lib/utils";
-
-function StatusPill({ status }: { status: AttemptStatus }) {
-  const map: Record<AttemptStatus, { label: string; cls: string }> = {
-    VERIFIED:           { label: "Verificado",           cls: "bg-emerald-50 border-emerald-200 text-emerald-700" },
-    INTRABANK_OK:       { label: "Intrabancario OK",      cls: "bg-emerald-50 border-emerald-200 text-emerald-700" },
-    PENDING:            { label: "Pendiente",             cls: "bg-amber-50 border-amber-200 text-amber-600" },
-    REJECTED:           { label: "Revisión",              cls: "bg-purple-50 border-purple-200 text-purple-600" },
-    INTRABANK_REJECTED: { label: "Intrabancario Fallido", cls: "bg-red-50 border-red-200 text-red-600" },
-    ERROR:              { label: "Error",                 cls: "bg-red-50 border-red-200 text-red-600" },
-    ABANDONED:          { label: "Abandonado",            cls: "bg-slate-100 border-slate-200 text-slate-600" },
-  };
-  const { label, cls } = map[status] ?? { label: status, cls: "bg-slate-100 border-slate-200 text-slate-600" };
-  return (
-    <span className={cn("inline-flex items-center border text-[11px] font-semibold px-2.5 py-[3px] rounded-full whitespace-nowrap", cls)}>
-      {label}
-    </span>
-  );
-}
+import { AttemptStatusBadge } from "@/components/ui/StatusBadge";
 
 type EventMeta = { icon: React.ElementType; color: string; label: string };
 
@@ -136,47 +119,47 @@ export default function PaymentDetailPage() {
 
       {/* Hero */}
       <div
-        className="bg-[#0B1426] rounded-2xl overflow-hidden"
-        style={{ boxShadow: "0 4px 24px rgba(11,20,38,0.18)" }}
+        className="bg-white rounded-2xl overflow-hidden border border-slate-200/80"
+        style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
       >
         <div className="px-6 pt-5 pb-6">
           <div className="flex items-start gap-3 mb-5">
             <Link href="/pagos">
-              <button className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors mt-0.5 shrink-0">
-                <ArrowLeft className="w-4 h-4 text-white" />
+              <button className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors mt-0.5 shrink-0">
+                <ArrowLeft className="w-4 h-4 text-slate-600" />
               </button>
             </Link>
             <div className="flex-1 min-w-0">
-              <p className="text-[11px] text-white/40 uppercase tracking-widest font-semibold mb-1">Intento de pago</p>
+              <p className="text-[11px] text-slate-400 uppercase tracking-widest font-semibold mb-1">Intento de pago</p>
               <div className="flex items-center gap-2.5 flex-wrap">
-                <h1 className="text-[22px] font-bold text-white leading-tight">#{attempt.id}</h1>
-                <StatusPill status={attempt.status} />
+                <h1 className="text-[22px] font-bold text-[#0B1426] leading-tight">#{attempt.id}</h1>
+                <AttemptStatusBadge status={attempt.status} />
                 {attempt.verifiedOnFirstTry && (
-                  <span className="inline-flex items-center gap-1.5 bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-[11px] font-semibold px-2.5 py-[3px] rounded-full">
+                  <span className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-semibold px-2.5 py-[3px] rounded-full">
                     <ShieldCheck className="w-3 h-3" /> Verificado a la primera
                   </span>
                 )}
               </div>
-              <p className="text-[13px] text-white/40 mt-1.5 font-mono">{attempt.tenantPhone}</p>
+              <p className="text-[13px] text-slate-400 mt-1.5 font-mono">{attempt.tenantPhone}</p>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-white/5 rounded-xl px-4 py-3">
-              <p className="text-[11px] text-white/40 uppercase tracking-widest font-semibold mb-1">Recibido</p>
-              <p className="text-[14px] font-semibold text-white">
+            <div className="bg-slate-50 rounded-xl px-4 py-3">
+              <p className="text-[11px] text-slate-400 uppercase tracking-widest font-semibold mb-1">Recibido</p>
+              <p className="text-[14px] font-semibold text-[#0B1426]">
                 {format(new Date(attempt.createdAt), "dd 'de' MMMM yyyy", { locale: es })}
               </p>
-              <p className="text-[12px] text-white/40 mt-0.5 font-mono">
+              <p className="text-[12px] text-slate-400 mt-0.5 font-mono">
                 {format(new Date(attempt.createdAt), "HH:mm:ss")}
               </p>
             </div>
-            <div className="bg-white/5 rounded-xl px-4 py-3">
-              <p className="text-[11px] text-white/40 uppercase tracking-widest font-semibold mb-1">Resultado</p>
-              <p className={cn("text-[14px] font-semibold", isVerified ? "text-emerald-400" : "text-white/60")}>
+            <div className="bg-slate-50 rounded-xl px-4 py-3">
+              <p className="text-[11px] text-slate-400 uppercase tracking-widest font-semibold mb-1">Resultado</p>
+              <p className={cn("text-[14px] font-semibold", isVerified ? "text-emerald-600" : "text-slate-400")}>
                 {isVerified ? "Comprobante válido" : "Sin verificar"}
               </p>
-              <p className="text-[12px] text-white/40 mt-0.5">{events.length} evento{events.length !== 1 ? "s" : ""}</p>
+              <p className="text-[12px] text-slate-400 mt-0.5">{events.length} evento{events.length !== 1 ? "s" : ""}</p>
             </div>
           </div>
         </div>

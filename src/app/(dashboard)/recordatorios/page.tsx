@@ -74,68 +74,68 @@ export default function RecordatoriosPage() {
 
       {/* Hero */}
       <div
-        className="bg-[#0B1426] rounded-2xl overflow-hidden"
-        style={{ boxShadow: "0 4px 24px rgba(11,20,38,0.18)" }}
+        className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden"
+        style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
       >
         <div className="px-6 pt-5 pb-6">
           <div className="flex items-center justify-between mb-5">
             <div>
-              <h1 className="text-[22px] font-bold text-white tracking-tight">Recordatorios</h1>
-              <p className="text-[13px] text-white/40 mt-0.5">{currentMonthLabelCap}</p>
+              <h1 className="text-[22px] font-bold text-[#0B1426] tracking-tight">Recordatorios</h1>
+              <p className="text-[13px] text-slate-400 mt-0.5">{currentMonthLabelCap}</p>
             </div>
-            {isLoading && <Loader2 className="w-5 h-5 text-white/30 animate-spin" />}
+            {isLoading && <Loader2 className="w-5 h-5 text-slate-300 animate-spin" />}
           </div>
 
           {/* Stats */}
           <div className="grid grid-cols-3 gap-3 mb-4">
-            <div className="bg-white/5 rounded-xl px-4 py-3">
+            <div className="bg-slate-50 border border-slate-100 rounded-xl px-4 py-3">
               <div className="flex items-center gap-1.5 mb-1">
-                <CheckCircle2 className="w-3.5 h-3.5 text-white/40" />
-                <p className="text-[11px] text-white/40 uppercase tracking-widest font-semibold">Enviados</p>
+                <CheckCircle2 className="w-3.5 h-3.5 text-slate-400" />
+                <p className="text-[11px] text-slate-400 uppercase tracking-widest font-semibold">Enviados</p>
               </div>
-              <p className="text-[24px] font-bold text-white leading-none">{sentCount}</p>
-              <p className="text-[12px] text-white/40 mt-1">este mes</p>
+              <p className="text-[24px] font-bold text-[#0B1426] leading-none">{sentCount}</p>
+              <p className="text-[12px] text-slate-400 mt-1">este mes</p>
             </div>
-            <div className="bg-white/5 rounded-xl px-4 py-3">
+            <div className="bg-slate-50 border border-slate-100 rounded-xl px-4 py-3">
               <div className="flex items-center gap-1.5 mb-1">
-                <Clock className="w-3.5 h-3.5 text-white/40" />
-                <p className="text-[11px] text-white/40 uppercase tracking-widest font-semibold">Pendientes</p>
+                <Clock className="w-3.5 h-3.5 text-slate-400" />
+                <p className="text-[11px] text-slate-400 uppercase tracking-widest font-semibold">Pendientes</p>
               </div>
-              <p className={cn("text-[24px] font-bold leading-none", pendingReminderCount > 0 ? "text-amber-400" : "text-white")}>
+              <p className={cn("text-[24px] font-bold leading-none", pendingReminderCount > 0 ? "text-amber-500" : "text-[#0B1426]")}>
                 {pendingReminderCount}
               </p>
-              <p className="text-[12px] text-white/40 mt-1">por enviar</p>
+              <p className="text-[12px] text-slate-400 mt-1">por enviar</p>
             </div>
-            <div className="bg-white/5 rounded-xl px-4 py-3">
+            <div className="bg-slate-50 border border-slate-100 rounded-xl px-4 py-3">
               <div className="flex items-center gap-1.5 mb-1">
-                <Users className="w-3.5 h-3.5 text-white/40" />
-                <p className="text-[11px] text-white/40 uppercase tracking-widest font-semibold">Total</p>
+                <Users className="w-3.5 h-3.5 text-slate-400" />
+                <p className="text-[11px] text-slate-400 uppercase tracking-widest font-semibold">Total</p>
               </div>
-              <p className="text-[24px] font-bold text-white leading-none">{tenantsWithStatus.length}</p>
-              <p className="text-[12px] text-white/40 mt-1">inquilinos</p>
+              <p className="text-[24px] font-bold text-[#0B1426] leading-none">{tenantsWithStatus.length}</p>
+              <p className="text-[12px] text-slate-400 mt-1">inquilinos</p>
             </div>
           </div>
 
           {/* Settings row */}
-          <div className="bg-white/5 rounded-xl px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="bg-slate-50 border border-slate-100 rounded-xl px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4">
             <div className="flex items-center justify-between flex-1 gap-4">
               <div>
-                <p className="text-[13px] font-semibold text-white">Recordatorios automáticos</p>
-                <p className="text-[12px] text-white/40 mt-0.5">El bot enviará recordatorios vía WhatsApp</p>
+                <p className="text-[13px] font-semibold text-[#0B1426]">Recordatorios automáticos</p>
+                <p className="text-[12px] text-slate-400 mt-0.5">El bot enviará recordatorios vía WhatsApp</p>
               </div>
               <Switch
                 checked={settings.autoRemindersEnabled}
                 onCheckedChange={(checked) => updateSettings({ autoRemindersEnabled: checked })}
               />
             </div>
-            <div className="hidden sm:block h-8 w-px bg-white/10" />
+            <div className="hidden sm:block h-8 w-px bg-slate-200" />
             <div className="flex items-center gap-3 shrink-0">
-              <p className="text-[13px] text-white/60 whitespace-nowrap">Días de anticipación</p>
+              <p className="text-[13px] text-slate-500 whitespace-nowrap">Días de anticipación</p>
               <Input
                 type="number"
                 min={1}
                 max={15}
-                className="w-16 h-8 bg-white/10 border-white/20 text-white text-center text-[13px]"
+                className="w-16 h-8 text-center text-[13px]"
                 value={settings.defaultReminderDays}
                 onChange={(e) => updateSettings({ defaultReminderDays: parseInt(e.target.value) || 3 })}
               />

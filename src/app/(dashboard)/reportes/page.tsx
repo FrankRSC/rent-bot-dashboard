@@ -5,29 +5,16 @@ import { format, parse, addMonths, subMonths } from "date-fns";
 import { es } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, TrendingUp, Zap } from "lucide-react";
 import { ApiErrorState } from "@/components/layout/ApiErrorState";
-import { BarChart, Bar, XAxis, YAxis, Cell, ResponsiveContainer, Tooltip } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
 import { formatCurrency, cn } from "@/lib/utils";
 import * as api from "@/lib/api";
 import type { LandlordReport, PaymentStatus } from "@/lib/types";
+import { PaymentStatusBadge } from "@/components/ui/StatusBadge";
 
 const LANDLORD_ID = parseInt(process.env.NEXT_PUBLIC_LANDLORD_ID ?? "1", 10);
 
 function toYM(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function StatusPill({ status }: { status: PaymentStatus }) {
-  const map: Record<PaymentStatus, string> = {
-    Pagado:    "bg-emerald-50 border-emerald-200 text-emerald-700",
-    Pendiente: "bg-amber-50 border-amber-200 text-amber-600",
-    Vencido:   "bg-red-50 border-red-200 text-red-600",
-    Revisión:  "bg-purple-50 border-purple-200 text-purple-600",
-  };
-  return (
-    <span className={cn("inline-flex items-center border text-[11px] font-semibold px-2 py-[2px] rounded-full whitespace-nowrap", map[status])}>
-      {status}
-    </span>
-  );
 }
 
 function ProgressBar({ percent }: { percent: number }) {
@@ -107,29 +94,29 @@ export default function ReportesPage() {
 
       {/* Hero */}
       <div
-        className="bg-[#0B1426] rounded-2xl overflow-hidden"
-        style={{ boxShadow: "0 4px 24px rgba(11,20,38,0.18)" }}
+        className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden"
+        style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
       >
         <div className="px-6 pt-5 pb-6">
           <div className="flex items-center justify-between mb-5">
             <div>
-              <h1 className="text-[22px] font-bold text-white tracking-tight">Reportes</h1>
-              <p className="text-[13px] text-white/40 mt-0.5 capitalize">{monthLabelCap}</p>
+              <h1 className="text-[22px] font-bold text-[#0B1426] tracking-tight">Reportes</h1>
+              <p className="text-[13px] text-slate-400 mt-0.5 capitalize">{monthLabelCap}</p>
             </div>
-            <div className="flex items-center gap-1 bg-white/10 rounded-xl p-1">
+            <div className="flex items-center gap-1 bg-slate-100 border border-slate-200 rounded-xl p-1">
               <button
                 onClick={handlePrev}
-                className="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center text-white transition-colors"
+                className="w-8 h-8 rounded-lg hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-colors"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
-              <span className="px-3 text-[13px] font-semibold text-white capitalize min-w-[130px] text-center">
+              <span className="px-3 text-[13px] font-semibold text-[#0B1426] capitalize min-w-[130px] text-center">
                 {monthLabelCap}
               </span>
               <button
                 onClick={handleNext}
                 disabled={month >= currentYM}
-                className="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center text-white transition-colors disabled:opacity-30"
+                className="w-8 h-8 rounded-lg hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-colors disabled:opacity-30"
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
@@ -137,42 +124,42 @@ export default function ReportesPage() {
           </div>
 
           <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-            <div className="bg-white/5 rounded-xl px-4 py-3">
-              <p className="text-[11px] text-white/40 uppercase tracking-widest font-semibold mb-1.5">Cobrado del mes</p>
-              <p className="text-[22px] font-bold text-emerald-400 leading-none tabular-nums">
+            <div className="bg-slate-50 border border-slate-100 rounded-xl px-4 py-3">
+              <p className="text-[11px] text-slate-400 uppercase tracking-widest font-semibold mb-1.5">Cobrado del mes</p>
+              <p className="text-[22px] font-bold text-emerald-600 leading-none tabular-nums">
                 {formatCurrency(summary.totalCobrado).replace(/\.\d+$/, "")}
               </p>
-              <p className="text-[12px] text-white/40 mt-1">
+              <p className="text-[12px] text-slate-400 mt-1">
                 {summary.cobradoCount} pago{summary.cobradoCount !== 1 ? "s" : ""} recibido{summary.cobradoCount !== 1 ? "s" : ""}
               </p>
             </div>
-            <div className="bg-white/5 rounded-xl px-4 py-3">
-              <p className="text-[11px] text-white/40 uppercase tracking-widest font-semibold mb-1.5">Pendiente</p>
-              <p className="text-[22px] font-bold text-amber-400 leading-none tabular-nums">
+            <div className="bg-slate-50 border border-slate-100 rounded-xl px-4 py-3">
+              <p className="text-[11px] text-slate-400 uppercase tracking-widest font-semibold mb-1.5">Pendiente</p>
+              <p className="text-[22px] font-bold text-amber-500 leading-none tabular-nums">
                 {formatCurrency(summary.totalPendiente).replace(/\.\d+$/, "")}
               </p>
-              <p className="text-[12px] text-white/40 mt-1">
+              <p className="text-[12px] text-slate-400 mt-1">
                 {summary.pendienteCount > 0 ? `${summary.pendienteCount} pendiente${summary.pendienteCount !== 1 ? "s" : ""}` : ""}
                 {summary.pendienteCount > 0 && summary.vencidoCount > 0 ? " · " : ""}
                 {summary.vencidoCount > 0 ? `${summary.vencidoCount} vencido${summary.vencidoCount !== 1 ? "s" : ""}` : ""}
                 {summary.pendienteCount === 0 && summary.vencidoCount === 0 ? "Todo cobrado" : ""}
               </p>
             </div>
-            <div className="bg-white/5 rounded-xl px-4 py-3">
-              <p className="text-[11px] text-white/40 uppercase tracking-widest font-semibold mb-1.5">Tasa de cobro</p>
-              <p className="text-[22px] font-bold text-white leading-none">
+            <div className="bg-slate-50 border border-slate-100 rounded-xl px-4 py-3">
+              <p className="text-[11px] text-slate-400 uppercase tracking-widest font-semibold mb-1.5">Tasa de cobro</p>
+              <p className="text-[22px] font-bold text-[#0B1426] leading-none">
                 {summary.cobradoCount}
-                <span className="text-white/40 text-[16px]">/{summary.totalTenants}</span>
+                <span className="text-slate-400 text-[16px]">/{summary.totalTenants}</span>
               </p>
-              <p className="text-[12px] text-white/40 mt-1">contratos · {paidPercent}% cobrado</p>
+              <p className="text-[12px] text-slate-400 mt-1">contratos · {paidPercent}% cobrado</p>
             </div>
-            <div className="bg-white/5 rounded-xl px-4 py-3">
-              <p className="text-[11px] text-white/40 uppercase tracking-widest font-semibold mb-1.5">1er intento</p>
+            <div className="bg-slate-50 border border-slate-100 rounded-xl px-4 py-3">
+              <p className="text-[11px] text-slate-400 uppercase tracking-widest font-semibold mb-1.5">1er intento</p>
               <div className="flex items-center gap-1.5">
                 <Zap className="w-5 h-5 text-[#2952F3]" />
-                <p className="text-[22px] font-bold text-white leading-none">{summary.verifiedOnFirstTryCount}</p>
+                <p className="text-[22px] font-bold text-[#0B1426] leading-none">{summary.verifiedOnFirstTryCount}</p>
               </div>
-              <p className="text-[12px] text-white/40 mt-1">{firstTryPercent}% de los cobros</p>
+              <p className="text-[12px] text-slate-400 mt-1">{firstTryPercent}% de los cobros</p>
             </div>
           </div>
         </div>
@@ -195,15 +182,20 @@ export default function ReportesPage() {
               <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#94a3b8" }} tickLine={false} axisLine={false} />
               <YAxis hide />
               <Tooltip
-                formatter={(value: number) => [formatCurrency(value), "Cobrado"]}
+                formatter={(value) => [formatCurrency(Number(value ?? 0)), "Cobrado"]}
                 contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }}
                 cursor={{ fill: "#f8fafc" }}
               />
-              <Bar dataKey="totalCobrado" radius={[4, 4, 0, 0]} maxBarSize={28} minPointSize={4}>
-                {trendData.map((entry, i) => (
-                  <Cell key={i} fill={entry.isCurrent ? "#047857" : entry.totalCobrado > 0 ? "#2952F3" : "#e2e8f0"} />
-                ))}
-              </Bar>
+              <Bar
+                dataKey="totalCobrado"
+                maxBarSize={28}
+                minPointSize={4}
+                shape={(props: { x?: number; y?: number; width?: number; height?: number; payload?: { isCurrent?: boolean; totalCobrado: number } }) => {
+                  const { x = 0, y = 0, width = 0, height = 0, payload } = props;
+                  const fill = payload?.isCurrent ? "#047857" : (payload?.totalCobrado ?? 0) > 0 ? "#2952F3" : "#e2e8f0";
+                  return <rect x={x} y={y} width={Math.max(0, width)} height={Math.max(0, height)} fill={fill} rx={3} ry={3} />;
+                }}
+              />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -265,7 +257,7 @@ export default function ReportesPage() {
               <p className="text-[12px] font-medium text-[#0B1426] tabular-nums">
                 {row.monthlyAmount ? formatCurrency(Number(row.monthlyAmount)) : "—"}
               </p>
-              <div><StatusPill status={row.paymentStatus} /></div>
+              <div><PaymentStatusBadge status={row.paymentStatus} /></div>
               <p className="text-[12px] text-slate-400">
                 {row.lastVerifiedAt ? format(new Date(row.lastVerifiedAt + ""), "dd/MM/yy") : "—"}
               </p>

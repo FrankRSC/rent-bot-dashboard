@@ -9,7 +9,7 @@ const ACCOUNT_TYPE_LABEL: Record<string, string> = {
 };
 import { useParams, notFound } from "next/navigation";
 import { format } from "date-fns";
-import { ArrowLeft, Plus, Pencil, Trash2, CheckCircle2, Bell, BellOff, Save, X, CalendarDays, Banknote, Users, Building2, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Plus, Pencil, Trash2, CheckCircle2, Bell, BellOff, Save, X, CalendarDays, Banknote, Users, Building2, AlertTriangle, FileText } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,26 +17,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useStore } from "@/store/useStore";
 import { cn, formatPhone, formatCurrency } from "@/lib/utils";
-import type { AccountType, PaymentStatus } from "@/lib/types";
-
-function StatusPill({ status }: { status: PaymentStatus }) {
-  const map: Record<PaymentStatus, string> = {
-    Pagado:    "bg-emerald-50 border-emerald-200 text-emerald-700",
-    Pendiente: "bg-amber-50 border-amber-200 text-amber-600",
-    Vencido:   "bg-red-50 border-red-200 text-red-600",
-    Revisión:  "bg-purple-50 border-purple-200 text-purple-600",
-  };
-  const dot: Record<PaymentStatus, string> = {
-    Pagado: "bg-emerald-500", Pendiente: "bg-amber-400 animate-pulse",
-    Vencido: "bg-red-500 animate-pulse", Revisión: "bg-purple-500",
-  };
-  return (
-    <span className={cn("inline-flex items-center gap-1.5 border text-[11px] font-semibold px-2.5 py-[3px] rounded-full whitespace-nowrap", map[status])}>
-      <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", dot[status])} />
-      {status}
-    </span>
-  );
-}
+import type { AccountType, TenantWithStatus } from "@/lib/types";
+import { PaymentStatusBadge } from "@/components/ui/StatusBadge";
+import * as api from "@/lib/api";
 
 function AddTenantDialog({ open, propertyId, onClose }: { open: boolean; propertyId: number; onClose: () => void }) {
   const { createTenant } = useStore();
@@ -126,6 +109,100 @@ function AddTenantDialog({ open, propertyId, onClose }: { open: boolean; propert
   );
 }
 
+function EditTenantDialog({ tenant, onClose }: { tenant: TenantWithStatus; onClose: () => void }) {
+  const { updateTenant } = useStore();
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    name: tenant.name,
+    phone: tenant.phone,
+    paymentDay: tenant.paymentDay ? String(tenant.paymentDay) : "",
+    monthlyAmount: tenant.monthlyAmount ? String(tenant.monthlyAmount) : "",
+    destinationAccount: tenant.destinationAccount ?? "",
+    destinationAccountType: (tenant.destinationAccountType ?? "CLABE") as AccountType,
+    rfc: tenant.rfc ?? "",
+  });
+
+  const handleSubmit = async () => {
+    setSaving(true);
+    try {
+      await updateTenant(tenant.id, {
+        name: form.name,
+        phone: form.phone,
+        paymentDay: form.paymentDay ? parseInt(form.paymentDay) : undefined,
+        monthlyAmount: form.monthlyAmount ? parseFloat(form.monthlyAmount) : undefined,
+        destinationAccount: form.destinationAccount || undefined,
+        destinationAccountType: form.destinationAccount ? form.destinationAccountType : undefined,
+      });
+      if (form.rfc !== (tenant.rfc ?? "")) {
+        await api.updateTenantFiscal(tenant.id, { rfc: form.rfc || undefined });
+      }
+      onClose();
+    } catch { /* silenciado */ }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader><DialogTitle>Editar inquilino</DialogTitle></DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">Nombre completo</label>
+            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">Teléfono WhatsApp (52XXXXXXXXXX)</label>
+            <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Día de pago</label>
+              <Input type="number" min={1} max={31} placeholder="1-31" value={form.paymentDay} onChange={(e) => setForm({ ...form, paymentDay: e.target.value })} />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Renta mensual</label>
+              <Input type="number" placeholder="$0.00" value={form.monthlyAmount} onChange={(e) => setForm({ ...form, monthlyAmount: e.target.value })} />
+            </div>
+          </div>
+          <div className="space-y-3 pt-1 border-t">
+            <p className="text-xs text-slate-400">Cuenta destino individual (opcional)</p>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Tipo de cuenta</label>
+              <Select value={form.destinationAccountType} onValueChange={(v) => setForm({ ...form, destinationAccountType: (v ?? "CLABE") as AccountType })}>
+                <SelectTrigger>
+                  <SelectValue>{ACCOUNT_TYPE_LABEL[form.destinationAccountType] ?? form.destinationAccountType}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="CLABE">CLABE (18 dígitos)</SelectItem>
+                  <SelectItem value="CARD">Tarjeta de débito (16 dígitos)</SelectItem>
+                  <SelectItem value="PHONE">Número de teléfono (10 dígitos)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Número de cuenta</label>
+              <Input placeholder="Dejar vacío para usar cuenta del arrendador" value={form.destinationAccount} onChange={(e) => setForm({ ...form, destinationAccount: e.target.value })} />
+            </div>
+          </div>
+          <div className="space-y-1.5 pt-1 border-t">
+            <label className="text-sm font-medium flex items-center gap-1.5">
+              <FileText className="w-3.5 h-3.5 text-slate-400" />
+              RFC (opcional, para facturación)
+            </label>
+            <Input placeholder="XAXX010101000" value={form.rfc} onChange={(e) => setForm({ ...form, rfc: e.target.value })} className="font-mono" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>Cancelar</Button>
+          <Button onClick={handleSubmit} disabled={saving} className="bg-[#2952F3] hover:bg-[#1e3fd4]">
+            {saving ? "Guardando..." : "Guardar"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function PropertyDetailPage() {
   const params = useParams();
   const id = parseInt(params.id as string, 10);
@@ -136,6 +213,7 @@ export default function PropertyDetailPage() {
 
   const [editing, setEditing] = useState(false);
   const [addTenantOpen, setAddTenantOpen] = useState(false);
+  const [editingTenant, setEditingTenant] = useState<TenantWithStatus | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState({ name: property?.name ?? "" });
@@ -169,32 +247,32 @@ export default function PropertyDetailPage() {
 
       {/* Hero */}
       <div
-        className="bg-[#0B1426] rounded-2xl overflow-hidden"
-        style={{ boxShadow: "0 4px 24px rgba(11,20,38,0.18)" }}
+        className="bg-white rounded-2xl overflow-hidden border border-slate-200/80"
+        style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
       >
         <div className="px-6 pt-5 pb-6">
           <div className="flex items-start justify-between gap-3 mb-5">
             <div className="flex items-center gap-3">
               <Link href="/propiedades">
-                <button className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
-                  <ArrowLeft className="w-4 h-4 text-white" />
+                <button className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors">
+                  <ArrowLeft className="w-4 h-4 text-slate-600" />
                 </button>
               </Link>
               <div>
                 {!editing ? (
                   <>
                     <div className="flex items-center gap-2">
-                      <Building2 className="w-3.5 h-3.5 text-white/40" />
-                      <p className="text-[11px] text-white/40 uppercase tracking-widest font-semibold">Propiedad</p>
+                      <Building2 className="w-3.5 h-3.5 text-slate-400" />
+                      <p className="text-[11px] text-slate-400 uppercase tracking-widest font-semibold">Propiedad</p>
                     </div>
-                    <h1 className="text-[22px] font-bold text-white mt-0.5 leading-tight">{property.name}</h1>
+                    <h1 className="text-[22px] font-bold text-[#0B1426] mt-0.5 leading-tight">{property.name}</h1>
                   </>
                 ) : (
                   <div className="mt-1">
                     <Input
                       value={editForm.name}
                       onChange={(e) => setEditForm({ name: e.target.value })}
-                      className="bg-white/10 border-white/20 text-white placeholder:text-white/40 h-9 w-56"
+                      className="h-9 w-56"
                     />
                   </div>
                 )}
@@ -204,7 +282,7 @@ export default function PropertyDetailPage() {
               {!editing ? (
                 <button
                   onClick={() => { setEditForm({ name: property.name }); setEditing(true); }}
-                  className="flex items-center gap-1.5 h-8 px-3 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[12px] font-medium transition-colors"
+                  className="flex items-center gap-1.5 h-8 px-3 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[12px] font-medium transition-colors"
                 >
                   <Pencil className="w-3.5 h-3.5" /> Editar
                 </button>
@@ -212,7 +290,7 @@ export default function PropertyDetailPage() {
                 <>
                   <button
                     onClick={() => setEditing(false)}
-                    className="flex items-center gap-1.5 h-8 px-3 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[12px] font-medium transition-colors"
+                    className="flex items-center gap-1.5 h-8 px-3 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[12px] font-medium transition-colors"
                   >
                     <X className="w-3.5 h-3.5" /> Cancelar
                   </button>
@@ -228,37 +306,37 @@ export default function PropertyDetailPage() {
           </div>
 
           <div className="grid grid-cols-3 gap-3">
-            <div className="bg-white/5 rounded-xl px-4 py-3">
+            <div className="bg-slate-50 rounded-xl px-4 py-3">
               <div className="flex items-center gap-1.5 mb-1">
-                <Users className="w-3.5 h-3.5 text-white/40" />
-                <p className="text-[11px] text-white/40 uppercase tracking-widest font-semibold">Inquilinos</p>
+                <Users className="w-3.5 h-3.5 text-slate-400" />
+                <p className="text-[11px] text-slate-400 uppercase tracking-widest font-semibold">Inquilinos</p>
               </div>
-              <p className="text-[22px] font-bold text-white leading-none">{propertyTenants.length}</p>
-              <p className="text-[12px] text-white/40 mt-1">{paidCount} al corriente</p>
+              <p className="text-[22px] font-bold text-[#0B1426] leading-none">{propertyTenants.length}</p>
+              <p className="text-[12px] text-slate-400 mt-1">{paidCount} al corriente</p>
             </div>
-            <div className="bg-white/5 rounded-xl px-4 py-3">
+            <div className="bg-slate-50 rounded-xl px-4 py-3">
               <div className="flex items-center gap-1.5 mb-1">
-                <Banknote className="w-3.5 h-3.5 text-white/40" />
-                <p className="text-[11px] text-white/40 uppercase tracking-widest font-semibold">Renta mensual</p>
+                <Banknote className="w-3.5 h-3.5 text-slate-400" />
+                <p className="text-[11px] text-slate-400 uppercase tracking-widest font-semibold">Renta mensual</p>
               </div>
-              <p className="text-[22px] font-bold text-white leading-none tabular-nums">
+              <p className="text-[22px] font-bold text-[#0B1426] leading-none tabular-nums">
                 {monthlyTotal > 0 ? formatCurrency(monthlyTotal).replace(/\.\d+$/, "") : "—"}
               </p>
-              <p className="text-[12px] text-white/40 mt-1">esperado por mes</p>
+              <p className="text-[12px] text-slate-400 mt-1">esperado por mes</p>
             </div>
-            <div className="bg-white/5 rounded-xl px-4 py-3">
+            <div className="bg-slate-50 rounded-xl px-4 py-3">
               <div className="flex items-center gap-1.5 mb-1">
-                <CheckCircle2 className="w-3.5 h-3.5 text-white/40" />
-                <p className="text-[11px] text-white/40 uppercase tracking-widest font-semibold">Estado</p>
+                <CheckCircle2 className="w-3.5 h-3.5 text-slate-400" />
+                <p className="text-[11px] text-slate-400 uppercase tracking-widest font-semibold">Estado</p>
               </div>
               <p className={cn("text-[22px] font-bold leading-none",
-                hasAlert ? "text-red-400"
-                : paidCount === propertyTenants.length && propertyTenants.length > 0 ? "text-emerald-400"
-                : "text-amber-400"
+                hasAlert ? "text-red-600"
+                : paidCount === propertyTenants.length && propertyTenants.length > 0 ? "text-emerald-600"
+                : "text-amber-600"
               )}>
                 {hasAlert ? "Alertas" : paidCount === propertyTenants.length && propertyTenants.length > 0 ? "Al día" : "Pendiente"}
               </p>
-              <p className="text-[12px] text-white/40 mt-1">
+              <p className="text-[12px] text-slate-400 mt-1">
                 {hasAlert ? "requiere atención" : "sin urgencias"}
               </p>
             </div>
@@ -326,7 +404,7 @@ export default function PropertyDetailPage() {
                         <p className="text-[12px] text-slate-400 font-mono mt-0.5">{formatPhone(tenant.phone)}</p>
                       </div>
                     </div>
-                    <StatusPill status={tenant.paymentStatus} />
+                    <PaymentStatusBadge status={tenant.paymentStatus} />
                   </div>
 
                   <div className="grid grid-cols-2 gap-2.5">
@@ -372,7 +450,13 @@ export default function PropertyDetailPage() {
                     </div>
                   </div>
 
-                  <div className="pt-1 border-t border-slate-100 flex justify-end">
+                  <div className="pt-1 border-t border-slate-100 flex justify-between">
+                    <button
+                      className="flex items-center gap-1 text-[12px] text-slate-500 hover:text-[#2952F3] font-medium px-2 py-1 rounded-lg hover:bg-[#eef1fd] transition-colors"
+                      onClick={() => setEditingTenant(tenant)}
+                    >
+                      <Pencil className="w-3.5 h-3.5" /> Editar
+                    </button>
                     <button
                       className="flex items-center gap-1 text-[12px] text-red-500 hover:text-red-700 font-medium px-2 py-1 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50"
                       onClick={() => setConfirmDeleteId(tenant.id)}
@@ -390,6 +474,9 @@ export default function PropertyDetailPage() {
       )}
 
       <AddTenantDialog open={addTenantOpen} propertyId={id} onClose={() => setAddTenantOpen(false)} />
+      {editingTenant && (
+        <EditTenantDialog tenant={editingTenant} onClose={() => setEditingTenant(null)} />
+      )}
 
       <Dialog open={confirmDeleteId !== null} onOpenChange={() => setConfirmDeleteId(null)}>
         <DialogContent className="max-w-sm">

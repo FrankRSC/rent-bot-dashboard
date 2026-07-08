@@ -4,6 +4,7 @@ import type {
   Property,
   Tenant,
   PaymentAttempt,
+  Factura,
 } from "@/lib/types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
@@ -33,7 +34,7 @@ export const getLandlordReport = (id: number, month?: string) =>
 
 export const updateLandlord = (
   id: number,
-  data: Partial<{ name: string; email: string; phone: string; ownerBank: string; beneficiaryAccount: string; beneficiaryAccountType: string }>
+  data: Partial<{ name: string; email: string; phone: string; ownerBank: string; beneficiaryAccount: string; beneficiaryAccountType: string; facturasEnabled: boolean }>
 ) =>
   request<Landlord>(`/landlords/${id}`, {
     method: "PATCH",
@@ -116,3 +117,50 @@ export const getPayments = (limit = 50) =>
 
 export const getPaymentById = (id: number) =>
   request<PaymentAttempt>(`/payments/${id}`);
+
+// ── Facturas ──────────────────────────────────────────────────────────────────
+
+export const getLandlordFacturas = (landlordId: number, period?: string) =>
+  request<Factura[]>(
+    `/landlords/${landlordId}/facturas${period ? `?period=${period}` : ""}`
+  );
+
+export const issueFactura = (data: {
+  landlordId: number;
+  tenantId: number;
+  paymentAttemptId?: number;
+  billingPeriod?: string;
+  amount?: number;
+  concepto?: string;
+}) =>
+  request<Factura>("/facturas", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+
+export const cancelFactura = (
+  id: string,
+  data: { motivo: "01" | "02" | "03" | "04"; uuidSustitucion?: string }
+) =>
+  request<unknown>(`/facturas/${id}/cancel`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+
+export const updateLandlordFiscal = (
+  id: number,
+  data: { rfc: string; taxRegime: string; zipCode: string; fiscalName?: string }
+) =>
+  request<Landlord>(`/landlords/${id}/fiscal`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+
+export const updateTenantFiscal = (
+  id: number,
+  data: { rfc?: string; taxRegime?: string; zipCode?: string }
+) =>
+  request<Tenant>(`/tenants/${id}/fiscal`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });

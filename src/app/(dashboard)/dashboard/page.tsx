@@ -5,13 +5,12 @@ import Link from "next/link";
 import { cn, formatCurrency } from "@/lib/utils";
 import { useStore } from "@/store/useStore";
 import { ApiErrorState } from "@/components/layout/ApiErrorState";
+import { ArrowRight, Send, AlertCircle, CheckCircle2 } from "lucide-react";
 import {
-  CheckCircle2, Clock, AlertCircle, ArrowRight, Send,
-} from "lucide-react";
-import {
-  BarChart, Bar, XAxis, Cell, ResponsiveContainer, Tooltip,
+  BarChart, Bar, XAxis, ResponsiveContainer, Tooltip,
 } from "recharts";
 import type { PaymentStatus } from "@/lib/types";
+import { PaymentStatusBadge } from "@/components/ui/StatusBadge";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -59,7 +58,7 @@ function CollectionRing({ percent }: { percent: number }) {
   return (
     <div className="relative flex items-center justify-center w-[110px] h-[110px] shrink-0">
       <svg width="110" height="110" viewBox="0 0 100 100" style={{ transform: "rotate(-90deg)" }}>
-        <circle cx="50" cy="50" r={nr} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth={sw} />
+        <circle cx="50" cy="50" r={nr} fill="none" stroke="#f1f5f9" strokeWidth={sw} />
         <circle
           cx="50" cy="50" r={nr} fill="none"
           stroke="#10b981" strokeWidth={sw}
@@ -69,27 +68,13 @@ function CollectionRing({ percent }: { percent: number }) {
         />
       </svg>
       <div className="absolute flex flex-col items-center justify-center">
-        <span className="text-[24px] font-bold text-white leading-none tracking-tight">{percent}%</span>
-        <span className="text-[10px] text-slate-500 font-medium mt-0.5 tracking-wide">COBRADO</span>
+        <span className="text-[24px] font-bold text-[#0B1426] leading-none tracking-tight">{percent}%</span>
+        <span className="text-[10px] text-slate-400 font-medium mt-0.5 tracking-wide">COBRADO</span>
       </div>
     </div>
   );
 }
 
-function TenantBadge({ status }: { status: PaymentStatus }) {
-  const map: Record<PaymentStatus, { label: string; cls: string; icon: React.ReactNode }> = {
-    Pagado:    { label: "Pagado",    cls: "bg-emerald-50 border-emerald-200 text-emerald-700",  icon: <CheckCircle2 className="w-3 h-3" /> },
-    Pendiente: { label: "Pendiente", cls: "bg-amber-50 border-amber-200 text-amber-600",        icon: <Clock className="w-3 h-3" /> },
-    Vencido:   { label: "Vencido",   cls: "bg-red-50 border-red-200 text-red-600",             icon: <AlertCircle className="w-3 h-3" /> },
-    Revisión:  { label: "Revisión",  cls: "bg-purple-50 border-purple-200 text-purple-600",    icon: <AlertCircle className="w-3 h-3" /> },
-  };
-  const { label, cls, icon } = map[status];
-  return (
-    <span className={cn("inline-flex items-center gap-1 border text-[11px] font-semibold px-2.5 py-[3px] rounded-full whitespace-nowrap", cls)}>
-      {icon}{label}
-    </span>
-  );
-}
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -164,28 +149,31 @@ export default function DashboardPage() {
     <div className="space-y-5">
 
       {/* ── Hero ────────────────────────────────────────────────────── */}
-      <div className="bg-[#0B1426] rounded-2xl overflow-hidden">
+      <div
+        className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden"
+        style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
+      >
 
         {/* Top bar */}
         <div className="flex items-center justify-between px-6 pt-5 pb-0">
           <div className="flex items-center gap-3">
-            <p className="text-[13px] font-semibold text-slate-300 capitalize">{monthLabel}</p>
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+            <p className="text-[13px] font-semibold text-slate-600 capitalize">{monthLabel}</p>
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
               <span className="relative flex h-1.5 w-1.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400" />
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-60" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
               </span>
               En vivo
             </span>
           </div>
-          <div className="flex items-center gap-0.5 bg-white/5 border border-white/10 rounded-xl p-1">
+          <div className="flex items-center gap-0.5 bg-slate-100 border border-slate-200 rounded-xl p-1">
             {PERIODS.map((p) => (
               <button
                 key={p}
                 onClick={() => setActivePeriod(p)}
                 className={cn(
                   "px-3 py-1 text-[12px] font-semibold rounded-lg transition-all whitespace-nowrap",
-                  activePeriod === p ? "bg-[#2952F3] text-white" : "text-slate-500 hover:text-slate-300"
+                  activePeriod === p ? "bg-[#2952F3] text-white" : "text-slate-500 hover:text-slate-700"
                 )}
               >
                 {p}
@@ -199,21 +187,21 @@ export default function DashboardPage() {
 
           {/* Left: Big number */}
           <div className="flex-1 min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-slate-600 mb-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-slate-400 mb-2">
               Cobrado del mes
             </p>
             <div className="flex items-baseline gap-1 tabular-nums">
-              <span className="text-[42px] sm:text-[52px] font-bold text-white leading-none tracking-tight">
+              <span className="text-[42px] sm:text-[52px] font-bold text-[#0B1426] leading-none tracking-tight">
                 {formatCurrency(totalCobrado).replace(/\.\d+$/, "")}
               </span>
-              <span className="text-[20px] font-light text-slate-600 leading-none">
+              <span className="text-[20px] font-light text-slate-400 leading-none">
                 {formatCurrency(totalCobrado).match(/\.\d+$/)?.[0] ?? ""}
               </span>
             </div>
             {totalExpected > 0 && (
-              <p className="text-[13px] text-slate-500 mt-1.5">
+              <p className="text-[13px] text-slate-400 mt-1.5">
                 de{" "}
-                <span className="text-slate-300 font-medium">
+                <span className="text-slate-600 font-medium">
                   {formatCurrency(totalExpected)}
                 </span>{" "}
                 esperado este mes
@@ -222,7 +210,7 @@ export default function DashboardPage() {
 
             {/* Progress bar */}
             <div className="mt-4 space-y-1.5">
-              <div className="h-1.5 bg-white/[0.07] rounded-full overflow-hidden">
+              <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full bg-emerald-500 transition-all duration-1000"
                   style={{ width: `${paidPercent}%` }}
@@ -230,17 +218,17 @@ export default function DashboardPage() {
               </div>
               <div className="flex gap-4 text-[12px]">
                 {cobradoCount > 0 && (
-                  <span className="text-emerald-400 font-medium">
+                  <span className="text-emerald-600 font-medium">
                     {cobradoCount} cobrado{cobradoCount !== 1 ? "s" : ""}
                   </span>
                 )}
                 {pendienteCount > 0 && (
-                  <span className="text-amber-400 font-medium">
+                  <span className="text-amber-500 font-medium">
                     {pendienteCount} pendiente{pendienteCount !== 1 ? "s" : ""}
                   </span>
                 )}
                 {vencidoCount > 0 && (
-                  <span className="text-red-400 font-medium">
+                  <span className="text-red-500 font-medium">
                     {vencidoCount} vencido{vencidoCount !== 1 ? "s" : ""}
                   </span>
                 )}
@@ -252,23 +240,23 @@ export default function DashboardPage() {
           <CollectionRing percent={paidPercent} />
 
           {/* Right: Mini stats */}
-          <div className="hidden sm:flex flex-col gap-4 pl-4 border-l border-white/[0.07] min-w-[140px]">
+          <div className="hidden sm:flex flex-col gap-4 pl-4 border-l border-slate-100 min-w-[140px]">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-600 mb-1">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400 mb-1">
                 Contratos
               </p>
-              <p className="text-[22px] font-bold text-white leading-none">{totalTenants}</p>
-              <p className="text-[11px] text-slate-500 mt-0.5">activos este mes</p>
+              <p className="text-[22px] font-bold text-[#0B1426] leading-none">{totalTenants}</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">activos este mes</p>
             </div>
-            <div className="w-full h-px bg-white/[0.07]" />
+            <div className="w-full h-px bg-slate-100" />
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-600 mb-1">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400 mb-1">
                 Próximo vence
               </p>
-              <p className="text-[22px] font-bold text-[#7b9af7] leading-none capitalize">
+              <p className="text-[22px] font-bold text-[#2952F3] leading-none capitalize">
                 {nextDueLabel}
               </p>
-              <p className="text-[11px] text-slate-500 mt-0.5">recordatorio activo</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">recordatorio activo</p>
             </div>
           </div>
 
@@ -370,7 +358,7 @@ export default function DashboardPage() {
                         {formatCurrency(Number(tenant.monthlyAmount))}
                       </span>
                     )}
-                    <TenantBadge status={tenant.paymentStatus} />
+                    <PaymentStatusBadge status={tenant.paymentStatus} />
                   </div>
                 </div>
 
@@ -396,7 +384,7 @@ export default function DashboardPage() {
                     {tenant.monthlyAmount ? formatCurrency(Number(tenant.monthlyAmount)) : "—"}
                   </span>
                   <div className="flex justify-center">
-                    <TenantBadge status={tenant.paymentStatus} />
+                    <PaymentStatusBadge status={tenant.paymentStatus} />
                   </div>
                   <div className="flex justify-center">
                     {tenant.paymentStatus !== "Pagado" && (
@@ -450,23 +438,22 @@ export default function DashboardPage() {
             <div className="px-3 pt-5 pb-3">
               <ResponsiveContainer width="100%" height={120}>
                 <BarChart data={monthlyData} barCategoryGap="34%" margin={{ top: 0, right: 4, left: 4, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="gBlue" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#2952F3" stopOpacity={0.9} />
-                      <stop offset="100%" stopColor="#2952F3" stopOpacity={0.15} />
-                    </linearGradient>
-                  </defs>
                   <XAxis dataKey="m" tick={{ fontSize: 10, fill: "#94a3b8" }} tickLine={false} axisLine={false} />
                   <Tooltip
-                    formatter={(v: number) => [formatCurrency(v), "Cobrado"]}
+                    formatter={(v) => [formatCurrency(Number(v ?? 0)), "Cobrado"]}
                     contentStyle={{ fontSize: 12, borderRadius: 10, border: "1px solid #e2e8f0", boxShadow: "0 8px 24px rgba(0,0,0,0.08)", padding: "6px 12px" }}
                     cursor={{ fill: "#f8fafc", radius: 4 }}
                   />
-                  <Bar dataKey="v" radius={[5, 5, 0, 0]} maxBarSize={16} minPointSize={4}>
-                    {monthlyData.map((e, i) => (
-                      <Cell key={i} fill={e.current ? "#10b981" : e.v > 0 ? "url(#gBlue)" : "#f1f5f9"} />
-                    ))}
-                  </Bar>
+                  <Bar
+                    dataKey="v"
+                    maxBarSize={16}
+                    minPointSize={4}
+                    shape={(props: { x?: number; y?: number; width?: number; height?: number; payload?: { current?: boolean; v: number } }) => {
+                      const { x = 0, y = 0, width = 0, height = 0, payload } = props;
+                      const fill = payload?.current ? "#10b981" : (payload?.v ?? 0) > 0 ? "#2952F3" : "#f1f5f9";
+                      return <rect x={x} y={y} width={Math.max(0, width)} height={Math.max(0, height)} fill={fill} rx={3} ry={3} />;
+                    }}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>

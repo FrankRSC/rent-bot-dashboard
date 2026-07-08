@@ -2,36 +2,14 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Plus, Building2, ChevronRight, CheckCircle2, Clock, AlertCircle, Users, Banknote } from "lucide-react";
+import { Plus, Building2, ChevronRight, Banknote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useStore } from "@/store/useStore";
 import { ApiErrorState } from "@/components/layout/ApiErrorState";
 import { cn, formatCurrency } from "@/lib/utils";
-import type { PaymentStatus } from "@/lib/types";
-
-function StatusDot({ status }: { status: PaymentStatus }) {
-  if (status === "Pagado")    return <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />;
-  if (status === "Vencido")   return <span className="w-2 h-2 rounded-full bg-red-500 shrink-0 animate-pulse" />;
-  if (status === "Revisión")  return <span className="w-2 h-2 rounded-full bg-purple-500 shrink-0" />;
-  return <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0 animate-pulse" />;
-}
-
-function StatusPill({ status }: { status: PaymentStatus }) {
-  const map: Record<PaymentStatus, string> = {
-    Pagado:    "bg-emerald-50 border-emerald-200 text-emerald-700",
-    Pendiente: "bg-amber-50 border-amber-200 text-amber-600",
-    Vencido:   "bg-red-50 border-red-200 text-red-600",
-    Revisión:  "bg-purple-50 border-purple-200 text-purple-600",
-  };
-  return (
-    <span className={cn("inline-flex items-center gap-1.5 border text-[11px] font-semibold px-2.5 py-[3px] rounded-full whitespace-nowrap", map[status])}>
-      <StatusDot status={status} />
-      {status}
-    </span>
-  );
-}
+import { PaymentStatusBadge } from "@/components/ui/StatusBadge";
 
 function NewPropertyDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { createProperty } = useStore();
@@ -217,7 +195,7 @@ export default function PropiedadesPage() {
                               </div>
                               <span className="text-[13px] text-slate-600 font-medium truncate">{t.name}</span>
                             </div>
-                            <StatusPill status={t.paymentStatus} />
+                            <PaymentStatusBadge status={t.paymentStatus} />
                           </div>
                         ))}
                         {tenants.length > 2 && (

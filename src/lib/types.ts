@@ -34,6 +34,11 @@ export interface Landlord {
   ownerBank?: string;
   beneficiaryAccount?: string;
   beneficiaryAccountType?: string;
+  rfc?: string;
+  taxRegime?: string;
+  zipCode?: string;
+  fiscalName?: string;
+  facturasEnabled?: boolean;
 }
 
 export interface Property {
@@ -51,6 +56,11 @@ export interface Tenant {
   destinationAccountType?: string;
   paymentDay?: number;
   monthlyAmount?: number;
+  rfc?: string;
+  taxRegime?: string;
+  zipCode?: string;
+  paymentStatus?: PaymentStatus;
+  lastPaymentDate?: string | null;
 }
 
 export interface TenantWithStatus extends Tenant {
@@ -134,4 +144,33 @@ export interface GlobalSettings {
   defaultReminderDays: number;
   notifyOnPayment: boolean;
   notifyOnOverdue: boolean;
+  rfc: string;
+  taxRegime: string;
+  zipCode: string;
+  fiscalName: string;
+  facturasEnabled: boolean;
+}
+
+export type FacturaStatus = "DRAFT" | "STAMPED" | "CANCELLED" | "ERROR";
+
+export interface Factura {
+  id: string;
+  landlordId: number;
+  tenantId: number | null;
+  paymentAttemptId: number | null;
+  uuidCfdi: string | null;
+  serie: string | null;
+  folio: string | null;
+  subtotal: number;
+  iva: number;
+  total: number;
+  concepto: string;
+  billingPeriod: string;
+  status: FacturaStatus;
+  xmlUrl: string | null;
+  pdfUrl: string | null;
+  errorMessage: string | null;
+  stampedAt: string | null;
+  createdAt: string;
+  tenant?: Tenant;
 }

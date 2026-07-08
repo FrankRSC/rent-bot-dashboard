@@ -4,13 +4,14 @@ import { useState, useMemo } from "react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Download, ExternalLink, Search, SlidersHorizontal, CheckCircle2, Clock, XCircle, TrendingUp } from "lucide-react";
+import { Download, ExternalLink, Search, SlidersHorizontal, TrendingUp, CheckCircle2, Clock, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useStore } from "@/store/useStore";
 import { ApiErrorState } from "@/components/layout/ApiErrorState";
 import { cn, formatCurrency } from "@/lib/utils";
 import type { AttemptStatus } from "@/lib/types";
+import { AttemptStatusBadge } from "@/components/ui/StatusBadge";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -37,27 +38,6 @@ function statusGroup(s: AttemptStatus): "cobrado" | "pendiente" | "rechazado" {
   return "rechazado";
 }
 
-function StatusPill({ status }: { status: AttemptStatus }) {
-  const group = statusGroup(status);
-  if (group === "cobrado")
-    return (
-      <span className="inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-semibold px-2.5 py-[3px] rounded-full whitespace-nowrap">
-        <CheckCircle2 className="w-3 h-3" /> Cobrado
-      </span>
-    );
-  if (group === "pendiente")
-    return (
-      <span className="inline-flex items-center gap-1 bg-amber-50 border border-amber-200 text-amber-700 text-[11px] font-semibold px-2.5 py-[3px] rounded-full whitespace-nowrap">
-        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" /> Pendiente
-      </span>
-    );
-  return (
-    <span className="inline-flex items-center gap-1 bg-red-50 border border-red-200 text-red-600 text-[11px] font-semibold px-2.5 py-[3px] rounded-full whitespace-nowrap">
-      <XCircle className="w-3 h-3" />
-      {status === "ABANDONED" ? "Abandonado" : "Revisión"}
-    </span>
-  );
-}
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -114,47 +94,50 @@ export default function PagosPage() {
       </div>
 
       {/* Hero stats */}
-      <div className="bg-[#0B1426] rounded-2xl overflow-hidden">
+      <div
+        className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden"
+        style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
+      >
         <div className="grid grid-cols-2 sm:grid-cols-4">
-          <div className="px-6 py-5 border-r border-b sm:border-b-0 border-white/[0.07]">
+          <div className="px-6 py-5 border-r border-b sm:border-b-0 border-slate-100">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">Total cobrado</p>
-              <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Total cobrado</p>
+              <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center">
+                <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
               </div>
             </div>
-            <p className="text-[22px] font-bold text-white leading-none tabular-nums">{formatCurrency(totalAmount)}</p>
-            <p className="text-[12px] text-slate-500 mt-1.5">{cobradoCount} verificado{cobradoCount !== 1 ? "s" : ""}</p>
+            <p className="text-[22px] font-bold text-[#0B1426] leading-none tabular-nums">{formatCurrency(totalAmount)}</p>
+            <p className="text-[12px] text-slate-400 mt-1.5">{cobradoCount} verificado{cobradoCount !== 1 ? "s" : ""}</p>
           </div>
-          <div className="px-6 py-5 border-b sm:border-b-0 sm:border-r border-white/[0.07]">
+          <div className="px-6 py-5 border-b sm:border-b-0 sm:border-r border-slate-100">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">Cobrados</p>
-              <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Cobrados</p>
+              <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
               </div>
             </div>
-            <p className="text-[28px] font-bold text-emerald-400 leading-none">{cobradoCount}</p>
-            <p className="text-[12px] text-slate-500 mt-1.5">pagos verificados</p>
+            <p className="text-[28px] font-bold text-emerald-600 leading-none">{cobradoCount}</p>
+            <p className="text-[12px] text-slate-400 mt-1.5">pagos verificados</p>
           </div>
-          <div className="px-6 py-5 border-r border-white/[0.07]">
+          <div className="px-6 py-5 border-r border-slate-100">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">Pendientes</p>
-              <div className="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center">
-                <Clock className="w-3.5 h-3.5 text-amber-400" />
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Pendientes</p>
+              <div className="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center">
+                <Clock className="w-3.5 h-3.5 text-amber-600" />
               </div>
             </div>
-            <p className="text-[28px] font-bold text-amber-400 leading-none">{pendienteCount}</p>
-            <p className="text-[12px] text-slate-500 mt-1.5">en proceso</p>
+            <p className="text-[28px] font-bold text-amber-500 leading-none">{pendienteCount}</p>
+            <p className="text-[12px] text-slate-400 mt-1.5">en proceso</p>
           </div>
           <div className="px-6 py-5">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">Revisión</p>
-              <div className="w-7 h-7 rounded-lg bg-red-500/10 flex items-center justify-center">
-                <XCircle className="w-3.5 h-3.5 text-red-400" />
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Revisión</p>
+              <div className="w-7 h-7 rounded-lg bg-red-50 flex items-center justify-center">
+                <XCircle className="w-3.5 h-3.5 text-red-500" />
               </div>
             </div>
-            <p className="text-[28px] font-bold text-red-400 leading-none">{rechazadoCount}</p>
-            <p className="text-[12px] text-slate-500 mt-1.5">no procesados</p>
+            <p className="text-[28px] font-bold text-red-500 leading-none">{rechazadoCount}</p>
+            <p className="text-[12px] text-slate-400 mt-1.5">no procesados</p>
           </div>
         </div>
       </div>
@@ -256,7 +239,7 @@ export default function PagosPage() {
                 </div>
                 <div className="flex flex-col items-end gap-1.5 shrink-0 ml-3">
                   <span className="text-[13px] font-semibold text-[#0B1426] tabular-nums">{amount > 0 ? formatCurrency(amount) : "—"}</span>
-                  <StatusPill status={attempt.status} />
+                  <AttemptStatusBadge status={attempt.status} />
                 </div>
               </div>
               {/* Desktop */}
@@ -270,7 +253,7 @@ export default function PagosPage() {
                 <p className="text-[12px] text-slate-400 text-right pr-4 tabular-nums">{format(new Date(attempt.createdAt), "dd MMM yyyy · HH:mm", { locale: es })}</p>
                 <p className="text-[11px] font-mono text-slate-400 text-right pr-4 truncate">{(attempt.ocrData?.claveRastreo as string) ?? "—"}</p>
                 <p className="text-[12px] text-slate-400 text-right pr-4">{(attempt.ocrData?.bancoEmisor as string) ?? "—"}</p>
-                <div className="flex justify-end"><StatusPill status={attempt.status} /></div>
+                <div className="flex justify-end"><AttemptStatusBadge status={attempt.status} /></div>
                 <div className="flex justify-center">
                   <Link href={`/pagos/${attempt.id}`}>
                     <button className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-[#2952F3] hover:bg-[#eef1fd] transition-colors">

@@ -6,6 +6,8 @@ import type {
   PaymentAttempt,
   GlobalSettings,
   PaymentStatus,
+  Factura,
+  FacturaStatus,
 } from "@/lib/types";
 import * as api from "@/lib/api";
 
@@ -15,43 +17,6 @@ const LANDLORD_ID = parseInt(
 );
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function deriveStatus(
-  tenant: Tenant,
-  attempts: PaymentAttempt[]
-): { paymentStatus: PaymentStatus; lastPaymentDate: string | null } {
-  const now = new Date();
-  const currentYM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-
-  const tenantAttempts = attempts.filter((a) => a.tenantPhone === tenant.phone);
-
-  const verifiedThisMonth = tenantAttempts.find(
-    (a) =>
-      (a.status === "VERIFIED" || a.status === "INTRABANK_OK") &&
-      a.createdAt.slice(0, 7) === currentYM
-  );
-  if (verifiedThisMonth) {
-    return { paymentStatus: "Pagado", lastPaymentDate: verifiedThisMonth.createdAt.slice(0, 10) };
-  }
-
-  const rejectedThisMonth = tenantAttempts.find(
-    (a) =>
-      (a.status === "REJECTED" || a.status === "INTRABANK_REJECTED" || a.status === "ERROR" || a.status === "ABANDONED") &&
-      a.createdAt.slice(0, 7) === currentYM
-  );
-  if (rejectedThisMonth) {
-    return { paymentStatus: "Revisión", lastPaymentDate: null };
-  }
-
-  const verifiedPrev = tenantAttempts.find(
-    (a) => a.status === "VERIFIED" || a.status === "INTRABANK_OK"
-  );
-  if (verifiedPrev) {
-    return { paymentStatus: "Vencido", lastPaymentDate: verifiedPrev.createdAt.slice(0, 10) };
-  }
-
-  return { paymentStatus: "Pendiente", lastPaymentDate: null };
-}
 
 function getReminderKey(tenantId: number): string {
   const now = new Date();
@@ -72,10 +37,12 @@ interface AppState {
   allTenants: Tenant[];
   payments: PaymentAttempt[];
   tenantsWithStatus: TenantWithStatus[];
+  facturas: Factura[];
 
   propertiesState: LoadState;
   tenantsState: LoadState;
   paymentsState: LoadState;
+  facturasState: LoadState;
 
   settings: GlobalSettings;
 
@@ -107,6 +74,10 @@ interface AppState {
   toggleReminderSent: (tenantId: number) => void;
   updateSettings: (updates: Partial<GlobalSettings>) => void;
 
+  fetchFacturas: () => Promise<void>;
+  issueFactura: (data: Parameters<typeof api.issueFactura>[0]) => Promise<Factura>;
+  cancelFactura: (id: string, data: Parameters<typeof api.cancelFactura>[1]) => Promise<void>;
+
   _recomputeTenantsWithStatus: () => void;
 }
 
@@ -119,10 +90,12 @@ export const useStore = create<AppState>((set, get) => ({
   allTenants: [],
   payments: [],
   tenantsWithStatus: [],
+  facturas: [],
 
   propertiesState: { loading: false, error: null },
   tenantsState: { loading: false, error: null },
   paymentsState: { loading: false, error: null },
+  facturasState: { loading: false, error: null },
 
   settings: {
     landlordName: "",
@@ -136,6 +109,11 @@ export const useStore = create<AppState>((set, get) => ({
     defaultReminderDays: 3,
     notifyOnPayment: true,
     notifyOnOverdue: true,
+    rfc: "",
+    taxRegime: "",
+    zipCode: "",
+    fiscalName: "",
+    facturasEnabled: false,
   },
 
   fetchProperties: async () => {
@@ -257,15 +235,54 @@ export const useStore = create<AppState>((set, get) => ({
   updateSettings: (updates) =>
     set((state) => ({ settings: { ...state.settings, ...updates } })),
 
+  fetchFacturas: async () => {
+    set({ facturasState: { loading: true, error: null } });
+    try {
+      const facturas = await api.getLandlordFacturas(LANDLORD_ID);
+      set({ facturas, facturasState: { loading: false, error: null } });
+    } catch (e) {
+      set({ facturasState: { loading: false, error: (e as Error).message } });
+    }
+  },
+
+  issueFactura: async (data) => {
+    const f = await api.issueFactura(data);
+    set((state) => ({ facturas: [f, ...state.facturas] }));
+    return f;
+  },
+
+  cancelFactura: async (id, data) => {
+    await api.cancelFactura(id, data);
+    set((state) => ({
+      facturas: state.facturas.map((f) =>
+        f.id === id ? { ...f, status: "CANCELLED" as FacturaStatus } : f
+      ),
+    }));
+  },
+
   _recomputeTenantsWithStatus: () => {
-    const { tenants, payments } = get();
+    const { tenants, allTenants } = get();
+    const statusMap = new Map<number, { paymentStatus: PaymentStatus; lastPaymentDate: string | null }>();
+    allTenants.forEach((t) => {
+      if (t.paymentStatus) {
+        statusMap.set(t.id, {
+          paymentStatus: t.paymentStatus,
+          lastPaymentDate: t.lastPaymentDate ?? null,
+        });
+      }
+    });
     const withStatus: TenantWithStatus[] = tenants.map((tenant) => {
-      const { paymentStatus, lastPaymentDate } = deriveStatus(tenant, payments);
+      const backend = statusMap.get(tenant.id);
       const reminderSent =
         typeof window !== "undefined"
           ? localStorage.getItem(getReminderKey(tenant.id)) === "true"
           : false;
-      return { ...tenant, paymentStatus, lastPaymentDate, reminderSent };
+      return {
+        ...tenant,
+        paymentStatus: backend?.paymentStatus ?? "Pendiente",
+        lastPaymentDate: backend?.lastPaymentDate ?? null,
+        reminderSent,
+      };
     });
     set({ tenantsWithStatus: withStatus });
   },
