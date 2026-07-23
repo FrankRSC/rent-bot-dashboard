@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import type { Landlord, LandlordReport } from "./types";
+import type { Landlord, LandlordReport, Property, Tenant, PaymentAttempt, Factura } from "./types";
 
 /**
  * Capa de datos para **Server Components** (Fase 4b). Lee la cookie httpOnly
@@ -36,4 +36,18 @@ export const getServerMe = () => serverFetch<Landlord>("me");
 export const getServerReport = (landlordId: number, month?: string) =>
   serverFetch<LandlordReport>(
     `landlords/${landlordId}/report${month ? `?month=${month}` : ""}`
+  );
+
+export const getServerProperties = (landlordId: number) =>
+  serverFetch<Property[]>(`landlords/${landlordId}/properties`);
+
+export const getServerTenants = (landlordId: number) =>
+  serverFetch<Tenant[]>(`landlords/${landlordId}/tenants`);
+
+export const getServerPayments = () =>
+  serverFetch<PaymentAttempt[]>(`payments?limit=50`);
+
+export const getServerFacturas = (landlordId: number, period?: string) =>
+  serverFetch<Factura[]>(
+    `landlords/${landlordId}/facturas${period ? `?period=${period}` : ""}`
   );
