@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { format, addDays, setDate } from "date-fns";
 import { es } from "date-fns/locale";
-import { CheckCircle2, Send, BellOff, Loader2, Bell, Users, Clock } from "lucide-react";
+import { CheckCircle2, BellOff, Loader2, Bell, Users, Clock, Send } from "lucide-react";
 import { ApiErrorState } from "@/components/layout/ApiErrorState";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { useStore } from "@/store/useStore";
+import * as api from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 function getNextReminder(paymentDay: number, daysBefore: number): string {
@@ -27,14 +28,63 @@ function getNextReminder(paymentDay: number, daysBefore: number): string {
 
 export default function RecordatoriosPage() {
   const {
-    tenantsWithStatus, properties, settings, updateSettings,
-    toggleReminderSent, fetchProperties, fetchTenants, fetchPayments,
+    tenantsWithStatus, properties, settings, landlordId,
+    sendReminder, updateSettings, fetchProperties, fetchAllTenants, fetchPayments,
     tenantsState, propertiesState,
   } = useStore();
 
+  // Envío por inquilino: loading + error inline junto al botón de cada fila.
+  const [sendingId, setSendingId] = useState<number | null>(null);
+  const [rowErrors, setRowErrors] = useState<Record<number, string>>({});
+
+  // Preferencias (autoRemindersEnabled / defaultReminderDays): optimista con
+  // rollback, mismo patrón que facturasEnabled en Configuración.
+  const [prefsError, setPrefsError] = useState(false);
+  const [daysDraft, setDaysDraft] = useState<string | null>(null);
+
+  const handleSend = async (tenantId: number) => {
+    setSendingId(tenantId);
+    setRowErrors((prev) => ({ ...prev, [tenantId]: "" }));
+    try {
+      await sendReminder(tenantId);
+    } catch {
+      setRowErrors((prev) => ({
+        ...prev,
+        [tenantId]: "No se pudo enviar. Intenta de nuevo.",
+      }));
+    } finally {
+      setSendingId(null);
+    }
+  };
+
+  const saveAutoReminders = async (enabled: boolean) => {
+    updateSettings({ autoRemindersEnabled: enabled });
+    setPrefsError(false);
+    try {
+      await api.updateLandlord(landlordId, { autoRemindersEnabled: enabled });
+    } catch {
+      updateSettings({ autoRemindersEnabled: !enabled });
+      setPrefsError(true);
+    }
+  };
+
+  const saveReminderDays = async (days: number) => {
+    const previous = settings.defaultReminderDays;
+    const clamped = Math.min(28, Math.max(0, Math.round(days)));
+    updateSettings({ defaultReminderDays: clamped });
+    setPrefsError(false);
+    try {
+      await api.updateLandlord(landlordId, { defaultReminderDays: clamped });
+    } catch {
+      updateSettings({ defaultReminderDays: previous });
+      setPrefsError(true);
+    }
+  };
+
   useEffect(() => {
     if (!properties.length) {
-      fetchProperties().then(() => fetchTenants());
+      fetchProperties();
+      fetchAllTenants();
       fetchPayments();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -66,7 +116,14 @@ export default function RecordatoriosPage() {
   const loadError = propertiesState.error || tenantsState.error;
 
   if (loadError) {
-    return <ApiErrorState onRetry={() => fetchProperties().then(() => fetchTenants())} />;
+    return (
+      <ApiErrorState
+        onRetry={() => {
+          fetchProperties();
+          fetchAllTenants();
+        }}
+      />
+    );
   }
 
   return (
@@ -74,73 +131,89 @@ export default function RecordatoriosPage() {
 
       {/* Hero */}
       <div
-        className="bg-[#0B1426] rounded-2xl overflow-hidden"
-        style={{ boxShadow: "0 4px 24px rgba(11,20,38,0.18)" }}
+        className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden"
+        style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
       >
         <div className="px-6 pt-5 pb-6">
           <div className="flex items-center justify-between mb-5">
             <div>
-              <h1 className="text-[22px] font-bold text-white tracking-tight">Recordatorios</h1>
-              <p className="text-[13px] text-white/40 mt-0.5">{currentMonthLabelCap}</p>
+              <h1 className="text-[22px] font-bold text-[#0B1426] tracking-tight">Recordatorios</h1>
+              <p className="text-[13px] text-slate-400 mt-0.5">{currentMonthLabelCap}</p>
+              <p className="text-[12px] text-slate-400 mt-1.5">
+                &quot;Enviar ahora&quot; manda el recordatorio al momento por WhatsApp. El bot además envía automáticos según estas preferencias (aviso anticipado, día de pago y atrasos).
+              </p>
             </div>
-            {isLoading && <Loader2 className="w-5 h-5 text-white/30 animate-spin" />}
+            {isLoading && <Loader2 className="w-5 h-5 text-slate-300 animate-spin" />}
           </div>
 
           {/* Stats */}
           <div className="grid grid-cols-3 gap-3 mb-4">
-            <div className="bg-white/5 rounded-xl px-4 py-3">
+            <div className="bg-slate-50 border border-slate-100 rounded-xl px-4 py-3">
               <div className="flex items-center gap-1.5 mb-1">
-                <CheckCircle2 className="w-3.5 h-3.5 text-white/40" />
-                <p className="text-[11px] text-white/40 uppercase tracking-widest font-semibold">Enviados</p>
+                <CheckCircle2 className="w-3.5 h-3.5 text-slate-400" />
+                <p className="text-[11px] text-slate-400 uppercase tracking-widest font-semibold">Enviados</p>
               </div>
-              <p className="text-[24px] font-bold text-white leading-none">{sentCount}</p>
-              <p className="text-[12px] text-white/40 mt-1">este mes</p>
+              <p className="text-[24px] font-bold text-[#0B1426] leading-none">{sentCount}</p>
+              <p className="text-[12px] text-slate-400 mt-1">este mes</p>
             </div>
-            <div className="bg-white/5 rounded-xl px-4 py-3">
+            <div className="bg-slate-50 border border-slate-100 rounded-xl px-4 py-3">
               <div className="flex items-center gap-1.5 mb-1">
-                <Clock className="w-3.5 h-3.5 text-white/40" />
-                <p className="text-[11px] text-white/40 uppercase tracking-widest font-semibold">Pendientes</p>
+                <Clock className="w-3.5 h-3.5 text-slate-400" />
+                <p className="text-[11px] text-slate-400 uppercase tracking-widest font-semibold">Pendientes</p>
               </div>
-              <p className={cn("text-[24px] font-bold leading-none", pendingReminderCount > 0 ? "text-amber-400" : "text-white")}>
+              <p className={cn("text-[24px] font-bold leading-none", pendingReminderCount > 0 ? "text-amber-500" : "text-[#0B1426]")}>
                 {pendingReminderCount}
               </p>
-              <p className="text-[12px] text-white/40 mt-1">por enviar</p>
+              <p className="text-[12px] text-slate-400 mt-1">por enviar</p>
             </div>
-            <div className="bg-white/5 rounded-xl px-4 py-3">
+            <div className="bg-slate-50 border border-slate-100 rounded-xl px-4 py-3">
               <div className="flex items-center gap-1.5 mb-1">
-                <Users className="w-3.5 h-3.5 text-white/40" />
-                <p className="text-[11px] text-white/40 uppercase tracking-widest font-semibold">Total</p>
+                <Users className="w-3.5 h-3.5 text-slate-400" />
+                <p className="text-[11px] text-slate-400 uppercase tracking-widest font-semibold">Total</p>
               </div>
-              <p className="text-[24px] font-bold text-white leading-none">{tenantsWithStatus.length}</p>
-              <p className="text-[12px] text-white/40 mt-1">inquilinos</p>
+              <p className="text-[24px] font-bold text-[#0B1426] leading-none">{tenantsWithStatus.length}</p>
+              <p className="text-[12px] text-slate-400 mt-1">inquilinos</p>
             </div>
           </div>
 
           {/* Settings row */}
-          <div className="bg-white/5 rounded-xl px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="bg-slate-50 border border-slate-100 rounded-xl px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4">
             <div className="flex items-center justify-between flex-1 gap-4">
               <div>
-                <p className="text-[13px] font-semibold text-white">Recordatorios automáticos</p>
-                <p className="text-[12px] text-white/40 mt-0.5">El bot enviará recordatorios vía WhatsApp</p>
+                <p className="text-[13px] font-semibold text-[#0B1426]">Recordatorios automáticos</p>
+                <p className="text-[12px] text-slate-400 mt-0.5">Si lo apagas, el bot no enviará recordatorios automáticos a tus inquilinos</p>
               </div>
               <Switch
                 checked={settings.autoRemindersEnabled}
-                onCheckedChange={(checked) => updateSettings({ autoRemindersEnabled: checked })}
+                onCheckedChange={saveAutoReminders}
               />
             </div>
-            <div className="hidden sm:block h-8 w-px bg-white/10" />
+            <div className="hidden sm:block h-8 w-px bg-slate-200" />
             <div className="flex items-center gap-3 shrink-0">
-              <p className="text-[13px] text-white/60 whitespace-nowrap">Días de anticipación</p>
+              <p className="text-[13px] text-slate-500 whitespace-nowrap">Días de anticipación</p>
               <Input
                 type="number"
-                min={1}
-                max={15}
-                className="w-16 h-8 bg-white/10 border-white/20 text-white text-center text-[13px]"
-                value={settings.defaultReminderDays}
-                onChange={(e) => updateSettings({ defaultReminderDays: parseInt(e.target.value) || 3 })}
+                min={0}
+                max={28}
+                className="w-16 h-8 text-center text-[13px]"
+                value={daysDraft ?? String(settings.defaultReminderDays)}
+                onChange={(e) => setDaysDraft(e.target.value)}
+                onBlur={() => {
+                  if (daysDraft === null) return;
+                  const n = Number(daysDraft);
+                  setDaysDraft(null);
+                  if (!Number.isNaN(n) && n !== settings.defaultReminderDays) {
+                    saveReminderDays(n);
+                  }
+                }}
               />
             </div>
           </div>
+          {prefsError && (
+            <p className="text-red-600 text-[12px] mt-2">
+              No se pudo guardar la preferencia. Verifica tu conexión e intenta de nuevo.
+            </p>
+          )}
         </div>
       </div>
 
@@ -185,28 +258,44 @@ export default function RecordatoriosPage() {
               <p className="text-[12px] text-slate-500 font-mono">{row.nextReminder}</p>
               <div>
                 {row.reminderSent ? (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5">
-                    <CheckCircle2 className="w-3 h-3" /> Enviado
-                  </span>
+                  <>
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5">
+                      <CheckCircle2 className="w-3 h-3" /> Enviado
+                    </span>
+                    {row.lastReminderAt && (
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        {format(new Date(row.lastReminderAt), "dd/MM HH:mm")}
+                      </p>
+                    )}
+                  </>
                 ) : (
                   <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 bg-slate-100 border border-slate-200 rounded-full px-2 py-0.5">
                     <BellOff className="w-3 h-3" /> No enviado
                   </span>
                 )}
               </div>
-              <button
-                className={cn(
-                  "inline-flex items-center gap-1.5 text-[12px] font-medium px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap",
-                  row.paymentStatus === "Pagado"
-                    ? "text-slate-300 cursor-not-allowed"
-                    : "text-[#2952F3] hover:bg-[#eef1fd]"
+              <div>
+                <button
+                  className={cn(
+                    "inline-flex items-center gap-1.5 text-[12px] font-medium px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap",
+                    row.paymentStatus === "Pagado" || sendingId === row.id
+                      ? "text-slate-300 cursor-not-allowed"
+                      : "text-[#2952F3] hover:bg-[#eef1fd]"
+                  )}
+                  disabled={row.paymentStatus === "Pagado" || sendingId === row.id}
+                  onClick={() => handleSend(row.id)}
+                >
+                  {sendingId === row.id
+                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    : <Send className="w-3.5 h-3.5" />}
+                  {sendingId === row.id
+                    ? "Enviando…"
+                    : row.reminderSent ? "Reenviar" : "Enviar ahora"}
+                </button>
+                {rowErrors[row.id] && (
+                  <p className="text-[10px] text-red-600 mt-0.5">{rowErrors[row.id]}</p>
                 )}
-                disabled={row.paymentStatus === "Pagado"}
-                onClick={() => toggleReminderSent(row.id)}
-              >
-                <Send className="w-3.5 h-3.5" />
-                {row.reminderSent ? "Desmarcar" : "Enviar ahora"}
-              </button>
+              </div>
             </div>
           ))}
         </div>

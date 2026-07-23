@@ -1,0 +1,87 @@
+import { cookies } from "next/headers";
+import { NextRequest, NextResponse } from "next/server";
+
+/**
+ * BFF (Fase 4a). El navegador llama a `/api/*` (mismo origen); este handler lee la
+ * cookie **httpOnly** `rc_token` y reenvía la petición a `BACKEND_URL` añadiendo
+ * `Authorization: Bearer <token>`. Reemplaza al rewrite de `next.config.ts`.
+ *
+ * El JWT vive solo en la cookie httpOnly: **nunca** llega al JS del cliente (cierra
+ * el vector XSS que tenía `localStorage`). Ver DECISIONS.md.
+ */
+const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:3001";
+const TOKEN_COOKIE = "rc_token";
+// 24 h, alineado a la expiración del JWT (§2.9 CONTRATOS_API.md).
+const COOKIE_MAX_AGE = 60 * 60 * 24;
+
+async function forward(req: NextRequest, path: string): Promise<Response> {
+  const token = (await cookies()).get(TOKEN_COOKIE)?.value;
+  const url = `${BACKEND_URL}/${path}${req.nextUrl.search}`;
+
+  const headers = new Headers();
+  const contentType = req.headers.get("content-type");
+  if (contentType) headers.set("content-type", contentType);
+  if (token) headers.set("authorization", `Bearer ${token}`);
+
+  const hasBody = req.method !== "GET" && req.method !== "HEAD";
+  const res = await fetch(url, {
+    method: req.method,
+    headers,
+    body: hasBody ? await req.arrayBuffer() : undefined,
+    redirect: "manual",
+  });
+
+  const out = new NextResponse(res.body, { status: res.status });
+  const ct = res.headers.get("content-type");
+  if (ct) out.headers.set("content-type", ct);
+  return out;
+}
+
+async function handle(
+  req: NextRequest,
+  ctx: { params: Promise<{ path: string[] }> }
+): Promise<Response> {
+  const { path: segments } = await ctx.params;
+  const path = segments.join("/");
+
+  // ── Login: interceptamos para guardar el token en la cookie httpOnly y NO
+  //    devolverlo al cliente (solo el `landlord`). ──
+  if (req.method === "POST" && path === "auth/login") {
+    const res = await fetch(`${BACKEND_URL}/auth/login`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: await req.arrayBuffer(),
+    });
+    if (!res.ok) {
+      return new NextResponse(res.body, {
+        status: res.status,
+        headers: { "content-type": res.headers.get("content-type") ?? "application/json" },
+      });
+    }
+    const data = (await res.json()) as { accessToken: string; landlord: unknown };
+    const out = NextResponse.json({ landlord: data.landlord });
+    out.cookies.set(TOKEN_COOKIE, data.accessToken, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: COOKIE_MAX_AGE,
+    });
+    return out;
+  }
+
+  // ── Logout: limpiamos la cookie (no hay endpoint de backend). ──
+  if (req.method === "POST" && path === "auth/logout") {
+    const out = new NextResponse(null, { status: 204 });
+    out.cookies.delete(TOKEN_COOKIE);
+    return out;
+  }
+
+  return forward(req, path);
+}
+
+export const GET = handle;
+export const POST = handle;
+export const PATCH = handle;
+export const PUT = handle;
+export const DELETE = handle;

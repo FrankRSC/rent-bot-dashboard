@@ -4,30 +4,15 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { ArrowLeft, ShieldCheck, ShieldX, Image, FileText, ScanLine, HelpCircle, Check, Globe, AlertCircle, Clock, AlertTriangle } from "lucide-react";
+import { ArrowLeft, ShieldCheck, ShieldX, Image, FileText, ScanLine, HelpCircle, Check, Globe, AlertCircle, Clock, AlertTriangle, HandCoins, Upload, UserCheck } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import * as api from "@/lib/api";
-import type { PaymentAttempt, AttemptStatus, EventType } from "@/lib/types";
+import type { PaymentAttempt, PeriodBalance, EventType, ManualPaymentMethod } from "@/lib/types";
 import { cn } from "@/lib/utils";
-
-function StatusPill({ status }: { status: AttemptStatus }) {
-  const map: Record<AttemptStatus, { label: string; cls: string }> = {
-    VERIFIED:           { label: "Verificado",           cls: "bg-emerald-50 border-emerald-200 text-emerald-700" },
-    INTRABANK_OK:       { label: "Intrabancario OK",      cls: "bg-emerald-50 border-emerald-200 text-emerald-700" },
-    PENDING:            { label: "Pendiente",             cls: "bg-amber-50 border-amber-200 text-amber-600" },
-    REJECTED:           { label: "Revisión",              cls: "bg-purple-50 border-purple-200 text-purple-600" },
-    INTRABANK_REJECTED: { label: "Intrabancario Fallido", cls: "bg-red-50 border-red-200 text-red-600" },
-    ERROR:              { label: "Error",                 cls: "bg-red-50 border-red-200 text-red-600" },
-    ABANDONED:          { label: "Abandonado",            cls: "bg-slate-100 border-slate-200 text-slate-600" },
-  };
-  const { label, cls } = map[status] ?? { label: status, cls: "bg-slate-100 border-slate-200 text-slate-600" };
-  return (
-    <span className={cn("inline-flex items-center border text-[11px] font-semibold px-2.5 py-[3px] rounded-full whitespace-nowrap", cls)}>
-      {label}
-    </span>
-  );
-}
+import { AttemptStatusBadge } from "@/components/ui/StatusBadge";
 
 type EventMeta = { icon: React.ElementType; color: string; label: string };
 
@@ -45,6 +30,9 @@ function getEventMeta(event: EventType): EventMeta {
     INTRABANK_OK:       { icon: ShieldCheck, color: "text-[#047857] bg-[#ecfdf5]",   label: "Intrabancario OK ✓" },
     INTRABANK_REJECTED: { icon: ShieldX,     color: "text-red-600 bg-red-50",        label: "Intrabancario Fallido" },
     ERROR:              { icon: AlertCircle, color: "text-red-600 bg-red-50",        label: "Error" },
+    MANUAL_REGISTERED:  { icon: HandCoins,   color: "text-[#2952F3] bg-[#eef1fd]",   label: "Pago registrado a mano" },
+    RECEIPT_UPLOADED:   { icon: Upload,      color: "text-blue-600 bg-blue-50",      label: "Comprobante subido desde el panel" },
+    MANUAL_REVIEW:      { icon: UserCheck,   color: "text-purple-600 bg-purple-50",  label: "Revisión manual del arrendador" },
   };
   return map[event] ?? { icon: Clock, color: "text-slate-400 bg-slate-100", label: event };
 }
@@ -69,8 +57,12 @@ const KEY_LABELS: Record<string, string> = {
   cepMonto:           "Monto verificado",
 };
 
+function isPrimitive(v: unknown): v is string | number | boolean {
+  return v !== null && v !== undefined && v !== "" && typeof v !== "object";
+}
+
 function DataSection({ data }: { data: Record<string, unknown> }) {
-  const entries = Object.entries(data).filter(([, v]) => v !== null && v !== undefined && v !== "");
+  const entries = Object.entries(data).filter(([, v]) => isPrimitive(v));
   if (!entries.length) return null;
   return (
     <div className="divide-y divide-slate-100 rounded-xl border border-slate-200/80 overflow-hidden">
@@ -84,21 +76,149 @@ function DataSection({ data }: { data: Record<string, unknown> }) {
   );
 }
 
+const METHOD_LABELS: Record<ManualPaymentMethod, string> = {
+  EFECTIVO:      "Efectivo",
+  TRANSFERENCIA: "Transferencia",
+  DEPOSITO:      "Depósito",
+  OTRO:          "Otro",
+};
+
+const formatMoney = (n: number) =>
+  n.toLocaleString("es-MX", { style: "currency", currency: "MXN" });
+
+/** `YYYY-MM-DD` → fecha local sin corrimiento por zona horaria. */
+const formatDay = (isoDay: string) =>
+  format(new Date(`${isoDay}T00:00:00`), "dd 'de' MMMM yyyy", { locale: es });
+
+function ReviewDialog({
+  attempt, action, onClose, onDone,
+}: {
+  attempt: PaymentAttempt;
+  action: "APPROVE" | "REJECT";
+  onClose: () => void;
+  onDone: (updated: PaymentAttempt) => void;
+}) {
+  const isApprove = action === "APPROVE";
+  const [note, setNote] = useState("");
+  const [amount, setAmount] = useState("");
+  const [billingPeriod, setBillingPeriod] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const parsedAmount = amount.trim() ? parseFloat(amount) : undefined;
+  const invalidAmount = parsedAmount !== undefined && (!Number.isFinite(parsedAmount) || parsedAmount <= 0);
+
+  const handleSubmit = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await api.reviewAttempt(attempt.id, {
+        action,
+        note: note.trim() || undefined,
+        ...(isApprove && parsedAmount !== undefined ? { amount: parsedAmount } : {}),
+        ...(isApprove && billingPeriod.trim() ? { billingPeriod: billingPeriod.trim() } : {}),
+      });
+      onDone(res.attempt);
+      onClose();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{isApprove ? "Aprobar intento" : "Rechazar intento"}</DialogTitle>
+          <DialogDescription>
+            {isApprove
+              ? <>El intento <span className="font-semibold">#{attempt.id}</span> se marcará como <span className="font-semibold text-emerald-700">Pagado (manual)</span>.</>
+              : <>El intento <span className="font-semibold">#{attempt.id}</span> se marcará como <span className="font-semibold text-red-600">rechazado</span>.</>}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          {isApprove && (
+            <>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Monto <span className="text-slate-400 font-normal">(opcional, corrige el detectado)</span></label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder={String(attempt.amount ?? attempt.ocrData?.monto ?? "0.00")}
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Periodo <span className="text-slate-400 font-normal">(YYYY-MM, opcional)</span></label>
+                <Input
+                  placeholder={attempt.billingPeriod ?? format(new Date(attempt.createdAt), "yyyy-MM")}
+                  value={billingPeriod}
+                  onChange={(e) => setBillingPeriod(e.target.value)}
+                />
+              </div>
+            </>
+          )}
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">Nota <span className="text-slate-400 font-normal">(opcional)</span></label>
+            <Input
+              placeholder="Confirmado en el estado de cuenta"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+            />
+          </div>
+          {invalidAmount && (
+            <p className="text-[12px] text-amber-600">El monto debe ser un número mayor a 0.</p>
+          )}
+          {error && (
+            <p className="text-[12px] text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>Cancelar</Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={saving || invalidAmount}
+            variant={isApprove ? "default" : "destructive"}
+            className={isApprove ? "bg-emerald-600 hover:bg-emerald-700 text-white" : undefined}
+          >
+            {saving ? (isApprove ? "Aprobando..." : "Rechazando...") : (isApprove ? "Aprobar" : "Rechazar")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function PaymentDetailPage() {
   const params = useParams();
   const id = parseInt(params.id as string, 10);
   const [attempt, setAttempt] = useState<PaymentAttempt | null>(null);
+  const [balance, setBalance] = useState<PeriodBalance | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reviewAction, setReviewAction] = useState<"APPROVE" | "REJECT" | null>(null);
 
   useEffect(() => {
     if (isNaN(id)) return;
-    setLoading(true);
     api.getPaymentById(id)
       .then(setAttempt)
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
   }, [id]);
+
+  // Para intentos PARTIAL obtenemos el balance del periodo: muestra cuánto va
+  // acumulado del total esperado, incluyendo abonos del bot y manuales.
+  useEffect(() => {
+    if (!attempt || attempt.status !== "PARTIAL" || !attempt.tenantId) return;
+    const period =
+      attempt.billingPeriod ??
+      `${new Date(attempt.createdAt).getFullYear()}-${String(new Date(attempt.createdAt).getMonth() + 1).padStart(2, "0")}`;
+    api.getPeriodBalance(attempt.tenantId, period).then(setBalance).catch(() => {});
+  }, [attempt]);
 
   if (loading) {
     return (
@@ -129,58 +249,157 @@ export default function PaymentDetailPage() {
   }
 
   const events = attempt.events ?? [];
-  const isVerified = attempt.status === "VERIFIED" || attempt.status === "INTRABANK_OK";
+  const isVerified = attempt.status === "VERIFIED" || attempt.status === "INTRABANK_OK" || attempt.status === "MANUAL_VERIFIED";
+
+  // Acciones de revisión (override del arrendador, docs/CONTRATOS_API.md §2.7)
+  const canApprove = !isVerified;
+  const canReject = attempt.status !== "REJECTED";
+
+  const manualRows: Array<[string, string]> = attempt.source === "MANUAL"
+    ? ([
+        attempt.amount != null ? ["Monto", formatMoney(attempt.amount)] : null,
+        attempt.paymentMethod ? ["Método de pago", METHOD_LABELS[attempt.paymentMethod]] : null,
+        attempt.paymentDate ? ["Fecha de pago", formatDay(attempt.paymentDate)] : null,
+        attempt.billingPeriod ? ["Periodo", attempt.billingPeriod] : null,
+        attempt.note ? ["Nota", attempt.note] : null,
+      ].filter(Boolean) as Array<[string, string]>)
+    : [];
 
   return (
     <div className="space-y-5">
 
       {/* Hero */}
       <div
-        className="bg-[#0B1426] rounded-2xl overflow-hidden"
-        style={{ boxShadow: "0 4px 24px rgba(11,20,38,0.18)" }}
+        className="bg-white rounded-2xl overflow-hidden border border-slate-200/80"
+        style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
       >
         <div className="px-6 pt-5 pb-6">
           <div className="flex items-start gap-3 mb-5">
             <Link href="/pagos">
-              <button className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors mt-0.5 shrink-0">
-                <ArrowLeft className="w-4 h-4 text-white" />
+              <button className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors mt-0.5 shrink-0">
+                <ArrowLeft className="w-4 h-4 text-slate-600" />
               </button>
             </Link>
             <div className="flex-1 min-w-0">
-              <p className="text-[11px] text-white/40 uppercase tracking-widest font-semibold mb-1">Intento de pago</p>
+              <p className="text-[11px] text-slate-400 uppercase tracking-widest font-semibold mb-1">Intento de pago</p>
               <div className="flex items-center gap-2.5 flex-wrap">
-                <h1 className="text-[22px] font-bold text-white leading-tight">#{attempt.id}</h1>
-                <StatusPill status={attempt.status} />
+                <h1 className="text-[22px] font-bold text-[#0B1426] leading-tight">#{attempt.id}</h1>
+                <AttemptStatusBadge status={attempt.status} />
                 {attempt.verifiedOnFirstTry && (
-                  <span className="inline-flex items-center gap-1.5 bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-[11px] font-semibold px-2.5 py-[3px] rounded-full">
+                  <span className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-semibold px-2.5 py-[3px] rounded-full">
                     <ShieldCheck className="w-3 h-3" /> Verificado a la primera
                   </span>
                 )}
               </div>
-              <p className="text-[13px] text-white/40 mt-1.5 font-mono">{attempt.tenantPhone}</p>
+              <p className="text-[13px] text-slate-400 mt-1.5 font-mono">{attempt.tenantPhone}</p>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-white/5 rounded-xl px-4 py-3">
-              <p className="text-[11px] text-white/40 uppercase tracking-widest font-semibold mb-1">Recibido</p>
-              <p className="text-[14px] font-semibold text-white">
+            <div className="bg-slate-50 rounded-xl px-4 py-3">
+              <p className="text-[11px] text-slate-400 uppercase tracking-widest font-semibold mb-1">Recibido</p>
+              <p className="text-[14px] font-semibold text-[#0B1426]">
                 {format(new Date(attempt.createdAt), "dd 'de' MMMM yyyy", { locale: es })}
               </p>
-              <p className="text-[12px] text-white/40 mt-0.5 font-mono">
+              <p className="text-[12px] text-slate-400 mt-0.5 font-mono">
                 {format(new Date(attempt.createdAt), "HH:mm:ss")}
               </p>
             </div>
-            <div className="bg-white/5 rounded-xl px-4 py-3">
-              <p className="text-[11px] text-white/40 uppercase tracking-widest font-semibold mb-1">Resultado</p>
-              <p className={cn("text-[14px] font-semibold", isVerified ? "text-emerald-400" : "text-white/60")}>
+            <div className="bg-slate-50 rounded-xl px-4 py-3">
+              <p className="text-[11px] text-slate-400 uppercase tracking-widest font-semibold mb-1">Resultado</p>
+              <p className={cn("text-[14px] font-semibold", isVerified ? "text-emerald-600" : "text-slate-400")}>
                 {isVerified ? "Comprobante válido" : "Sin verificar"}
               </p>
-              <p className="text-[12px] text-white/40 mt-0.5">{events.length} evento{events.length !== 1 ? "s" : ""}</p>
+              <p className="text-[12px] text-slate-400 mt-0.5">{events.length} evento{events.length !== 1 ? "s" : ""}</p>
             </div>
           </div>
+
+          {(canApprove || canReject) && (
+            <div className="flex items-center gap-2 mt-4 pt-4 border-t border-slate-100">
+              <p className="text-[11px] text-slate-400 uppercase tracking-widest font-semibold mr-auto">Revisión</p>
+              {canApprove && (
+                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => setReviewAction("APPROVE")}>
+                  <ShieldCheck className="w-3.5 h-3.5" /> Aprobar
+                </Button>
+              )}
+              {canReject && (
+                <Button size="sm" variant="destructive" onClick={() => setReviewAction("REJECT")}>
+                  <ShieldX className="w-3.5 h-3.5" /> Rechazar
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Balance del periodo — solo para intentos PARTIAL */}
+      {attempt.status === "PARTIAL" && balance && (
+        <div
+          className="bg-white rounded-2xl border border-slate-200/80 p-5"
+          style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-7 h-7 rounded-lg bg-sky-50 flex items-center justify-center shrink-0">
+              <HandCoins className="w-3.5 h-3.5 text-sky-600" />
+            </div>
+            <div>
+              <p className="text-[13px] font-semibold text-[#0B1426]">Saldo del periodo · {balance.period}</p>
+              <p className="text-[11px] text-slate-400">Este intento es un abono — se acumula con otros pagos del mes</p>
+            </div>
+          </div>
+          <div className="space-y-3">
+            <div className="flex items-end justify-between text-[13px]">
+              <span className="text-slate-500">Pagado</span>
+              <span className="font-bold text-[#0B1426]">
+                {formatMoney(balance.paid)}
+                {balance.expected != null && (
+                  <span className="text-slate-400 font-normal"> de {formatMoney(balance.expected)}</span>
+                )}
+              </span>
+            </div>
+            {balance.expected != null && balance.expected > 0 && (
+              <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-sky-400 transition-all duration-700"
+                  style={{ width: `${Math.min(100, Math.round((balance.paid / balance.expected) * 100))}%` }}
+                />
+              </div>
+            )}
+            {balance.remaining != null && balance.remaining > 0 && (
+              <p className="text-[12px] text-amber-600 font-medium">
+                Faltan {formatMoney(balance.remaining)} para completar la renta
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Datos capturados a mano (source MANUAL) */}
+      {attempt.source === "MANUAL" && (
+        <div
+          className="bg-white rounded-2xl border border-slate-200/80 p-5"
+          style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-7 h-7 rounded-lg bg-[#eef1fd] flex items-center justify-center shrink-0">
+              <HandCoins className="w-3.5 h-3.5 text-[#2952F3]" />
+            </div>
+            <p className="text-[13px] font-semibold text-[#0B1426]">Registro manual</p>
+          </div>
+          {manualRows.length > 0 ? (
+            <div className="divide-y divide-slate-100 rounded-xl border border-slate-200/80 overflow-hidden">
+              {manualRows.map(([label, value]) => (
+                <div key={label} className="flex items-start gap-3 px-4 py-2.5 bg-white">
+                  <span className="text-[12px] text-slate-400 min-w-[140px] shrink-0">{label}</span>
+                  <span className="text-[13px] font-medium text-[#0B1426] break-all">{value}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[13px] text-slate-400">Sin datos capturados</p>
+          )}
+        </div>
+      )}
 
       {/* OCR + CEP */}
       {(attempt.ocrData || attempt.cepResponse) && (
@@ -252,7 +471,7 @@ export default function PaymentDetailPage() {
                         {ev.data && Object.keys(ev.data).length > 0 && (
                           <div className="mt-1.5 flex flex-wrap gap-1.5">
                             {Object.entries(ev.data)
-                              .filter(([, v]) => v !== null && v !== undefined)
+                              .filter(([, v]) => isPrimitive(v))
                               .map(([key, value]) => (
                                 <span key={key} className="inline-flex items-center gap-1 text-[11px] bg-slate-100 text-slate-600 rounded-md px-2 py-0.5">
                                   <span className="text-slate-400">{KEY_LABELS[key] ?? key}:</span> {String(value)}
@@ -269,6 +488,28 @@ export default function PaymentDetailPage() {
           )}
         </div>
       </div>
+
+      {reviewAction && (
+        <ReviewDialog
+          key={reviewAction}
+          attempt={attempt}
+          action={reviewAction}
+          onClose={() => setReviewAction(null)}
+          onDone={(updated) =>
+            setAttempt((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    ...updated,
+                    // La respuesta del review puede venir sin relaciones: conserva las locales.
+                    events: updated.events?.length ? updated.events : prev.events,
+                    tenant: updated.tenant ?? prev.tenant,
+                  }
+                : updated
+            )
+          }
+        />
+      )}
     </div>
   );
 }
