@@ -50,7 +50,7 @@ function NewPropertyDialog({ open, onClose }: { open: boolean; onClose: () => vo
 }
 
 export default function PropiedadesPage() {
-  const { properties, tenantsWithStatus, propertiesState, fetchProperties, fetchTenants } = useStore();
+  const { properties, tenantsWithStatus, propertiesState, fetchProperties, fetchAllTenants } = useStore();
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const totalRenta = tenantsWithStatus.reduce(
@@ -76,7 +76,7 @@ export default function PropiedadesPage() {
   }
 
   if (propertiesState.error) {
-    return <ApiErrorState onRetry={() => fetchProperties().then(() => fetchTenants())} />;
+    return <ApiErrorState onRetry={() => { fetchProperties(); fetchAllTenants(); }} />;
   }
 
   return (

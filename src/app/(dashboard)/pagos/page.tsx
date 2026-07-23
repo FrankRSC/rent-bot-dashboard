@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Download, ExternalLink, Search, SlidersHorizontal, TrendingUp, CheckCircle2, Clock, XCircle } from "lucide-react";
+import { Download, ExternalLink, Plus, Search, SlidersHorizontal, TrendingUp, CheckCircle2, Clock, Upload, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useStore } from "@/store/useStore";
@@ -12,6 +12,8 @@ import { ApiErrorState } from "@/components/layout/ApiErrorState";
 import { cn, formatCurrency } from "@/lib/utils";
 import type { AttemptStatus } from "@/lib/types";
 import { AttemptStatusBadge } from "@/components/ui/StatusBadge";
+import { ManualPaymentDialog } from "./ManualPaymentDialog";
+import { UploadReceiptDialog } from "./UploadReceiptDialog";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -30,12 +32,21 @@ const STATUS_FILTER = [
   { value: "rechazado", label: "Revisión" },
 ];
 
-function isCobrado(s: AttemptStatus) { return s === "VERIFIED" || s === "INTRABANK_OK"; }
-function isPendiente(s: AttemptStatus) { return s === "PENDING"; }
+function isCobrado(s: AttemptStatus) { return s === "VERIFIED" || s === "INTRABANK_OK" || s === "MANUAL_VERIFIED"; }
+function isPendiente(s: AttemptStatus) { return s === "PENDING" || s === "PARTIAL"; }
 function statusGroup(s: AttemptStatus): "cobrado" | "pendiente" | "rechazado" {
   if (isCobrado(s)) return "cobrado";
   if (isPendiente(s)) return "pendiente";
   return "rechazado";
+}
+
+/** Pill de origen: marca los intentos registrados a mano por el arrendador. */
+function ManualPill() {
+  return (
+    <span className="inline-flex items-center bg-slate-100 border border-slate-200 text-slate-500 text-[10px] font-semibold px-1.5 py-px rounded-full whitespace-nowrap shrink-0">
+      Manual
+    </span>
+  );
 }
 
 
@@ -46,6 +57,8 @@ export default function PagosPage() {
   const [filterProperty, setFilterProperty] = useState("todos");
   const [filterMonth, setFilterMonth] = useState("todos");
   const [filterStatus, setFilterStatus] = useState("todos");
+  const [manualOpen, setManualOpen] = useState(false);
+  const [receiptOpen, setReceiptOpen] = useState(false);
 
   const tenantMap = useMemo(() => {
     const m = new Map<string, { name: string; propertyId: number }>();
@@ -70,7 +83,7 @@ export default function PagosPage() {
     }),
   [payments, tenantMap, propertyMap, filterProperty, filterMonth, filterStatus]);
 
-  const totalAmount    = filtered.filter((a) => isCobrado(a.status)).reduce((s, a) => s + Number(a.ocrData?.monto ?? a.cepResponse?.monto ?? 0), 0);
+  const totalAmount    = filtered.filter((a) => isCobrado(a.status)).reduce((s, a) => s + Number(a.ocrData?.monto ?? a.cepResponse?.monto ?? a.amount ?? 0), 0);
   const cobradoCount   = filtered.filter((a) => isCobrado(a.status)).length;
   const pendienteCount = filtered.filter((a) => isPendiente(a.status)).length;
   const rechazadoCount = filtered.filter((a) => statusGroup(a.status) === "rechazado").length;
@@ -86,11 +99,19 @@ export default function PagosPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-[22px] font-bold text-[#0B1426] tracking-tight">Seguimiento de pagos</h1>
-          <p className="text-sm text-slate-400 mt-0.5">Comprobantes recibidos y verificados vía WhatsApp</p>
+          <p className="text-sm text-slate-400 mt-0.5">Comprobantes vía WhatsApp y pagos registrados a mano</p>
         </div>
-        <Button variant="outline" size="sm" className="gap-2 text-slate-600 border-slate-200">
-          <Download className="w-4 h-4" /> Exportar
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="gap-2 text-slate-600 border-slate-200">
+            <Download className="w-4 h-4" /> Exportar
+          </Button>
+          <Button variant="outline" size="sm" className="gap-1.5 text-slate-600 border-slate-200" onClick={() => setReceiptOpen(true)}>
+            <Upload className="w-4 h-4" /> Subir comprobante
+          </Button>
+          <Button size="sm" className="bg-[#2952F3] hover:bg-[#1e3fd4] gap-1.5" onClick={() => setManualOpen(true)}>
+            <Plus className="w-4 h-4" /> Registrar pago
+          </Button>
+        </div>
       </div>
 
       {/* Hero stats */}
@@ -222,7 +243,9 @@ export default function PagosPage() {
         ) : filtered.map((attempt) => {
           const ti = tenantMap.get(attempt.tenantPhone);
           const propName = ti ? (propertyMap.get(ti.propertyId) ?? "—") : "—";
-          const amount = Number(attempt.ocrData?.monto ?? attempt.cepResponse?.monto ?? 0);
+          // Los intentos manuales llevan el monto en `amount`; los del bot en ocrData/cepResponse.
+          const amount = Number(attempt.ocrData?.monto ?? attempt.cepResponse?.monto ?? attempt.amount ?? 0);
+          const isManual = attempt.source === "MANUAL";
           const name = ti?.name ?? attempt.tenantPhone;
           const ini = name.split(" ").map((w: string) => w[0]).slice(0, 2).join("").toUpperCase();
 
@@ -233,7 +256,10 @@ export default function PagosPage() {
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-8 h-8 rounded-full bg-[#eef1fd] flex items-center justify-center text-[11px] font-bold text-[#2952F3] shrink-0">{ini}</div>
                   <div className="min-w-0">
-                    <p className="text-[13px] font-semibold text-[#0B1426] truncate">{name}</p>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <p className="text-[13px] font-semibold text-[#0B1426] truncate">{name}</p>
+                      {isManual && <ManualPill />}
+                    </div>
                     <p className="text-[11px] text-slate-400">{propName} · {format(new Date(attempt.createdAt), "dd/MM/yy")}</p>
                   </div>
                 </div>
@@ -247,6 +273,7 @@ export default function PagosPage() {
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-8 h-8 rounded-full bg-[#eef1fd] flex items-center justify-center text-[11px] font-bold text-[#2952F3] shrink-0">{ini}</div>
                   <p className="text-[13px] font-semibold text-[#0B1426] truncate">{name}</p>
+                  {isManual && <ManualPill />}
                 </div>
                 <p className="text-[13px] text-slate-500 truncate pr-4">{propName}</p>
                 <p className="text-[13px] font-semibold text-[#0B1426] text-right tabular-nums pr-4">{amount > 0 ? formatCurrency(amount) : "—"}</p>
@@ -277,6 +304,9 @@ export default function PagosPage() {
           </div>
         )}
       </div>
+
+      <ManualPaymentDialog open={manualOpen} onClose={() => setManualOpen(false)} />
+      <UploadReceiptDialog open={receiptOpen} onClose={() => setReceiptOpen(false)} />
     </div>
   );
 }

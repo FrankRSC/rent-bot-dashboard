@@ -16,8 +16,6 @@ import { ApiErrorState } from "@/components/layout/ApiErrorState";
 import { cn, formatCurrency } from "@/lib/utils";
 import type { FacturaStatus } from "@/lib/types";
 
-const LANDLORD_ID = parseInt(process.env.NEXT_PUBLIC_LANDLORD_ID ?? "1", 10);
-
 const currentYM = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
 
 function FacturaStatusPill({ status }: { status: FacturaStatus }) {
@@ -36,7 +34,7 @@ function FacturaStatusPill({ status }: { status: FacturaStatus }) {
 }
 
 function IssueFacturaDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { allTenants, settings, issueFactura } = useStore();
+  const { allTenants, settings, issueFactura, landlordId } = useStore();
   const [tenantId, setTenantId] = useState("");
   const [billingPeriod, setBillingPeriod] = useState(currentYM);
   const [amount, setAmount] = useState("");
@@ -44,15 +42,14 @@ function IssueFacturaDialog({ open, onClose }: { open: boolean; onClose: () => v
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const selectedTenant = allTenants.find((t) => t.id === parseInt(tenantId));
-
-  useEffect(() => {
-    if (selectedTenant?.monthlyAmount) {
-      setAmount(String(selectedTenant.monthlyAmount));
-    }
-  }, [selectedTenant]);
-
   const noRfc = !settings.rfc;
+
+  const handleTenantChange = (v: string | null) => {
+    const value = v ?? "";
+    setTenantId(value);
+    const tenant = allTenants.find((t) => t.id === parseInt(value));
+    if (tenant?.monthlyAmount) setAmount(String(tenant.monthlyAmount));
+  };
 
   const handleSubmit = async () => {
     if (!tenantId) return;
@@ -60,7 +57,7 @@ function IssueFacturaDialog({ open, onClose }: { open: boolean; onClose: () => v
     setError(null);
     try {
       await issueFactura({
-        landlordId: LANDLORD_ID,
+        landlordId,
         tenantId: parseInt(tenantId),
         billingPeriod: billingPeriod || undefined,
         amount: amount ? parseFloat(amount) : undefined,
@@ -91,7 +88,7 @@ function IssueFacturaDialog({ open, onClose }: { open: boolean; onClose: () => v
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
               <label className="text-sm font-medium">Inquilino</label>
-              <Select value={tenantId} onValueChange={(v) => setTenantId(v ?? "")}>
+              <Select value={tenantId} onValueChange={handleTenantChange}>
                 <SelectTrigger><SelectValue placeholder="Seleccionar inquilino" /></SelectTrigger>
                 <SelectContent>
                   {allTenants.map((t) => (
@@ -134,14 +131,17 @@ function CancelDialog({
   const { cancelFactura } = useStore();
   const [motivo, setMotivo] = useState<"01" | "02" | "03" | "04">("02");
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleCancel = async () => {
     setSaving(true);
+    setError(null);
     try {
       await cancelFactura(facturaId, { motivo });
       onClose();
-    } catch { /* silenciado */ }
-    finally { setSaving(false); }
+    } catch (e) {
+      setError((e as Error).message || "No se pudo cancelar la factura. Intenta de nuevo.");
+    } finally { setSaving(false); }
   };
 
   return (
@@ -159,6 +159,9 @@ function CancelDialog({
               <SelectItem value="04">04 – Operación nominativa relacionada en factura global</SelectItem>
             </SelectContent>
           </Select>
+          {error && (
+            <p className="text-[12px] text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={saving}>Cancelar</Button>
@@ -179,7 +182,17 @@ export default function FacturasPage() {
 
   useEffect(() => {
     if (settings.facturasEnabled) fetchFacturas();
-  }, [settings.facturasEnabled]);
+  }, [settings.facturasEnabled, fetchFacturas]);
+
+  const filtered = useMemo(() =>
+    filterPeriod === "todos" ? facturas : facturas.filter((f) => f.billingPeriod === filterPeriod),
+    [facturas, filterPeriod]
+  );
+
+  const periods = useMemo(() => {
+    const set = new Set(facturas.map((f) => f.billingPeriod));
+    return Array.from(set).sort().reverse();
+  }, [facturas]);
 
   if (!settings.facturasEnabled) {
     return (
@@ -195,19 +208,9 @@ export default function FacturasPage() {
     );
   }
 
-  const filtered = useMemo(() =>
-    filterPeriod === "todos" ? facturas : facturas.filter((f) => f.billingPeriod === filterPeriod),
-    [facturas, filterPeriod]
-  );
-
   const stampedCount = facturas.filter((f) => f.status === "STAMPED").length;
   const thisMonthCount = facturas.filter((f) => f.billingPeriod === currentYM).length;
   const totalStamped = facturas.filter((f) => f.status === "STAMPED").reduce((s, f) => s + Number(f.total), 0);
-
-  const periods = useMemo(() => {
-    const set = new Set(facturas.map((f) => f.billingPeriod));
-    return Array.from(set).sort().reverse();
-  }, [facturas]);
 
   if (facturasState.error) return <ApiErrorState onRetry={fetchFacturas} />;
 

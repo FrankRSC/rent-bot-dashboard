@@ -21,6 +21,47 @@ import type { AccountType, TenantWithStatus } from "@/lib/types";
 import { PaymentStatusBadge } from "@/components/ui/StatusBadge";
 import * as api from "@/lib/api";
 
+// ── Vigencia de contrato y ajuste de renta (§2.3 CONTRATOS_API.md) ───────────
+type ContractValues = {
+  contractStartDate: string;
+  contractEndDate: string;
+  nextMonthlyAmount: string;
+  adjustmentDate: string;
+};
+
+function ContractFields({ values, onChange }: { values: ContractValues; onChange: (patch: Partial<ContractValues>) => void }) {
+  return (
+    <div className="space-y-3 pt-1 border-t">
+      <p className="text-xs text-slate-400 flex items-center gap-1.5">
+        <CalendarDays className="w-3.5 h-3.5" /> Vigencia de contrato y ajuste de renta (opcional)
+      </p>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium">Inicio de vigencia</label>
+          <Input type="date" value={values.contractStartDate} onChange={(e) => onChange({ contractStartDate: e.target.value })} />
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium">Fin de vigencia</label>
+          <Input type="date" value={values.contractEndDate} onChange={(e) => onChange({ contractEndDate: e.target.value })} />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium">Renta tras ajuste</label>
+          <Input type="number" placeholder="$0.00" value={values.nextMonthlyAmount} onChange={(e) => onChange({ nextMonthlyAmount: e.target.value })} />
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium">Fecha de ajuste</label>
+          <Input type="date" value={values.adjustmentDate} onChange={(e) => onChange({ adjustmentDate: e.target.value })} />
+        </div>
+      </div>
+      <p className="text-[11px] text-slate-400 leading-snug">
+        Fuera de la vigencia, el bot rechaza los comprobantes del inquilino. La renta tras ajuste aplica desde la fecha indicada.
+      </p>
+    </div>
+  );
+}
+
 function AddTenantDialog({ open, propertyId, onClose }: { open: boolean; propertyId: number; onClose: () => void }) {
   const { createTenant } = useStore();
   const [saving, setSaving] = useState(false);
@@ -31,6 +72,10 @@ function AddTenantDialog({ open, propertyId, onClose }: { open: boolean; propert
     monthlyAmount: "",
     destinationAccount: "",
     destinationAccountType: "CLABE" as AccountType,
+    contractStartDate: "",
+    contractEndDate: "",
+    nextMonthlyAmount: "",
+    adjustmentDate: "",
   });
 
   const handleSubmit = async () => {
@@ -44,9 +89,13 @@ function AddTenantDialog({ open, propertyId, onClose }: { open: boolean; propert
         monthlyAmount: form.monthlyAmount ? parseFloat(form.monthlyAmount) : undefined,
         destinationAccount: form.destinationAccount || undefined,
         destinationAccountType: form.destinationAccount ? form.destinationAccountType : undefined,
+        contractStartDate: form.contractStartDate || undefined,
+        contractEndDate: form.contractEndDate || undefined,
+        nextMonthlyAmount: form.nextMonthlyAmount ? parseFloat(form.nextMonthlyAmount) : undefined,
+        adjustmentDate: form.adjustmentDate || undefined,
       });
       onClose();
-      setForm({ name: "", phone: "", paymentDay: "", monthlyAmount: "", destinationAccount: "", destinationAccountType: "CLABE" });
+      setForm({ name: "", phone: "", paymentDay: "", monthlyAmount: "", destinationAccount: "", destinationAccountType: "CLABE", contractStartDate: "", contractEndDate: "", nextMonthlyAmount: "", adjustmentDate: "" });
     } catch {
       // silenciado
     } finally {
@@ -97,6 +146,7 @@ function AddTenantDialog({ open, propertyId, onClose }: { open: boolean; propert
               <Input placeholder="Dejar vacío para usar cuenta del arrendador" value={form.destinationAccount} onChange={(e) => setForm({ ...form, destinationAccount: e.target.value })} />
             </div>
           </div>
+          <ContractFields values={form} onChange={(patch) => setForm({ ...form, ...patch })} />
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={saving}>Cancelar</Button>
@@ -120,6 +170,10 @@ function EditTenantDialog({ tenant, onClose }: { tenant: TenantWithStatus; onClo
     destinationAccount: tenant.destinationAccount ?? "",
     destinationAccountType: (tenant.destinationAccountType ?? "CLABE") as AccountType,
     rfc: tenant.rfc ?? "",
+    contractStartDate: tenant.contractStartDate ?? "",
+    contractEndDate: tenant.contractEndDate ?? "",
+    nextMonthlyAmount: tenant.nextMonthlyAmount != null ? String(tenant.nextMonthlyAmount) : "",
+    adjustmentDate: tenant.adjustmentDate ?? "",
   });
 
   const handleSubmit = async () => {
@@ -132,6 +186,10 @@ function EditTenantDialog({ tenant, onClose }: { tenant: TenantWithStatus; onClo
         monthlyAmount: form.monthlyAmount ? parseFloat(form.monthlyAmount) : undefined,
         destinationAccount: form.destinationAccount || undefined,
         destinationAccountType: form.destinationAccount ? form.destinationAccountType : undefined,
+        contractStartDate: form.contractStartDate || undefined,
+        contractEndDate: form.contractEndDate || undefined,
+        nextMonthlyAmount: form.nextMonthlyAmount ? parseFloat(form.nextMonthlyAmount) : undefined,
+        adjustmentDate: form.adjustmentDate || undefined,
       });
       if (form.rfc !== (tenant.rfc ?? "")) {
         await api.updateTenantFiscal(tenant.id, { rfc: form.rfc || undefined });
@@ -184,6 +242,7 @@ function EditTenantDialog({ tenant, onClose }: { tenant: TenantWithStatus; onClo
               <Input placeholder="Dejar vacío para usar cuenta del arrendador" value={form.destinationAccount} onChange={(e) => setForm({ ...form, destinationAccount: e.target.value })} />
             </div>
           </div>
+          <ContractFields values={form} onChange={(patch) => setForm({ ...form, ...patch })} />
           <div className="space-y-1.5 pt-1 border-t">
             <label className="text-sm font-medium flex items-center gap-1.5">
               <FileText className="w-3.5 h-3.5 text-slate-400" />
@@ -202,6 +261,20 @@ function EditTenantDialog({ tenant, onClose }: { tenant: TenantWithStatus; onClo
     </Dialog>
   );
 }
+
+// Estado de vigencia derivado de las fechas del contrato (comparación lexicográfica
+// de strings YYYY-MM-DD). Fuera de rango → el bot rechaza los comprobantes (§2.3).
+function contractInfo(t: TenantWithStatus) {
+  const today = new Date().toISOString().slice(0, 10);
+  const hasVigencia = !!(t.contractStartDate || t.contractEndDate);
+  const outOfRange =
+    (!!t.contractStartDate && today < t.contractStartDate) ||
+    (!!t.contractEndDate && today > t.contractEndDate);
+  const hasAdjustment = t.nextMonthlyAmount != null && !!t.adjustmentDate;
+  return { hasVigencia, outOfRange, hasAdjustment };
+}
+
+const fmtDay = (d: string) => format(new Date(d + "T12:00:00"), "dd/MM/yy");
 
 export default function PropertyDetailPage() {
   const params = useParams();
@@ -380,6 +453,7 @@ export default function PropertyDetailPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {propertyTenants.map((tenant) => {
             const initials = tenant.name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+            const contract = contractInfo(tenant);
             return (
               <div
                 key={tenant.id}
@@ -449,6 +523,36 @@ export default function PropertyDetailPage() {
                       </p>
                     </div>
                   </div>
+
+                  {(contract.hasVigencia || contract.hasAdjustment) && (
+                    <div className="flex flex-col gap-1.5">
+                      {contract.hasVigencia && (
+                        <div className="flex items-center justify-between gap-2 bg-slate-50 rounded-xl px-3 py-2">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <CalendarDays className="w-3 h-3 text-slate-400 shrink-0" />
+                            <p className="text-[11px] text-slate-500 truncate tabular-nums">
+                              {tenant.contractStartDate ? fmtDay(tenant.contractStartDate) : "—"}
+                              {" – "}
+                              {tenant.contractEndDate ? fmtDay(tenant.contractEndDate) : "—"}
+                            </p>
+                          </div>
+                          {contract.outOfRange ? (
+                            <span className="text-[10px] font-semibold text-red-600 bg-red-50 border border-red-200 rounded-full px-2 py-[2px] shrink-0 whitespace-nowrap">Fuera de vigencia</span>
+                          ) : (
+                            <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-[2px] shrink-0 whitespace-nowrap">Vigente</span>
+                          )}
+                        </div>
+                      )}
+                      {contract.hasAdjustment && (
+                        <div className="flex items-center gap-1.5 px-1">
+                          <Banknote className="w-3 h-3 text-slate-400 shrink-0" />
+                          <p className="text-[11px] text-slate-500 truncate">
+                            Ajuste a ${Number(tenant.nextMonthlyAmount).toLocaleString("es-MX")} desde {tenant.adjustmentDate ? fmtDay(tenant.adjustmentDate) : "—"}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <div className="pt-1 border-t border-slate-100 flex justify-between">
                     <button

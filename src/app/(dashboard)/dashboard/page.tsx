@@ -17,7 +17,6 @@ import { PaymentStatusBadge } from "@/components/ui/StatusBadge";
 const PERIODS = ["Mayo 26", "Abril", "Marzo", "YTD"] as const;
 type Period = (typeof PERIODS)[number];
 
-const MONTH_LABELS = ["E","F","M","A","M","J","J","A","S","O","N","D"];
 const WEEK_DAYS = ["L","M","M","J","V","S","D"];
 
 const monthlyData = [
@@ -28,7 +27,7 @@ const monthlyData = [
 ];
 
 const STATUS_ORDER: Record<PaymentStatus, number> = {
-  Vencido: 0, Revisión: 1, Pendiente: 2, Pagado: 3,
+  Vencido: 0, Revisión: 1, Pendiente: 2, Parcial: 2, Pagado: 3,
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -83,10 +82,10 @@ export default function DashboardPage() {
   const {
     payments, tenantsWithStatus, properties,
     propertiesState, paymentsState,
-    fetchProperties, fetchTenants, fetchPayments, fetchAllTenants,
+    fetchProperties, fetchPayments, fetchAllTenants,
   } = useStore();
 
-  const now = new Date();
+  const now = useMemo(() => new Date(), []);
   const calendar = buildCalendar(now.getFullYear(), now.getMonth());
   const today = now.getDate();
   const currentYM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -134,7 +133,7 @@ export default function DashboardPage() {
 
   const hasError = !!(propertiesState.error || paymentsState.error);
   const handleRetry = () => {
-    fetchPayments(); fetchAllTenants(); fetchProperties().then(() => fetchTenants());
+    fetchPayments(); fetchAllTenants(); fetchProperties();
   };
 
   if (hasError) {

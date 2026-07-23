@@ -10,18 +10,18 @@
 
 ## Índice por impacto
 
-| ID | Impacto | Mejora | Esfuerzo |
-|----|---------|--------|----------|
-| D1 | 🔴 Crítico | Settings de notificaciones/recordatorios no se guardan (solo local) | Medio |
-| D2 | 🔴 Crítico | Recordatorios "enviados" viven en `localStorage`, no en el backend | Medio |
-| D3 | 🟠 Alto | Estado del bot es un `true` hardcodeado, no un health real | Bajo |
-| D4 | 🟠 Alto | Auth ausente + `landlordId` hardcodeado y duplicado | Medio |
-| D5 | 🟠 Alto | Errores de guardado silenciados (el usuario no se entera) | Bajo |
-| D6 | 🟡 Medio | Carga de datos redundante (N+1 + doble fetch de inquilinos) | Medio |
-| D7 | 🟡 Medio | Tipos duplicados a mano → drift con el backend | Medio |
-| D8 | 🟡 Medio | Todo client-side: sin Server Components ni caché | Medio |
-| D9 | 🟡 Medio | `ConnectionBanner` no cubre todos los estados de error | Bajo |
-| D10 | 🔵 Mejora | Proxy `/api` y config hardcodeada a `localhost:3001` | Bajo |
+| ID | Impacto | Mejora | Esfuerzo | Estado (2026-07) |
+|----|---------|--------|----------|------------------|
+| D1 | 🔴 Crítico | Settings de notificaciones/recordatorios no se guardan (solo local) | Medio | ✅ Aplicado: toggles activos, persisten vía `PATCH /landlords/:id` (estricto) con rollback optimista; el cron del bot ya respeta las prefs (G3 cerrado) |
+| D2 | 🔴 Crítico | Recordatorios "enviados" viven en `localStorage`, no en el backend | Medio | ✅ Aplicado: envío real con `POST /tenants/:id/reminder` + `lastReminderAt` del servidor; marcas de `localStorage` eliminadas (G5 cerrado) |
+| D3 | 🟠 Alto | Estado del bot es un `true` hardcodeado, no un health real | Bajo | ✅ Aplicado: `botStatus` con `checkBackendHealth` cada 30 s (fallback a `/landlords/:id` mientras no exista `/health`) |
+| D4 | 🟠 Alto | Auth ausente + `landlordId` hardcodeado y duplicado | Medio | 🔶 Parcial: `landlordId` centralizado en el store; login/JWT pendiente del backend (N11) |
+| D5 | 🟠 Alto | Errores de guardado silenciados (el usuario no se entera) | Bajo | ✅ Aplicado: errores inline en configuración, cero `catch {}` (regla eslint `no-empty`) |
+| D6 | 🟡 Medio | Carga de datos redundante (N+1 + doble fetch de inquilinos) | Medio | ✅ Aplicado: `fetchAllTenants` como fuente única, N+1 eliminado, sin waterfall |
+| D7 | 🟡 Medio | Tipos duplicados a mano → drift con el backend | Medio | 🔶 Parcial: `OcrData`/`CepResponse`/`CancelFacturaResponse` tipados; generación desde OpenAPI pendiente del backend (Q9) |
+| D8 | 🟡 Medio | Todo client-side: sin Server Components ni caché | Medio | ⬜ Pendiente (decisión de arquitectura; ver AGENTS.md) |
+| D9 | 🟡 Medio | `ConnectionBanner` no cubre todos los estados de error | Bajo | ✅ Aplicado: cubre los 4 estados + botón "Reintentar" selectivo |
+| D10 | 🔵 Mejora | Proxy `/api` y config hardcodeada a `localhost:3001` | Bajo | ✅ Aplicado: `BACKEND_URL` en `next.config.ts`, `BASE` default `/api`, `.env.example` |
 
 ---
 
