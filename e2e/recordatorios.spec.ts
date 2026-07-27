@@ -55,6 +55,9 @@ test.describe("Recordatorios", () => {
   test("persiste el toggle de recordatorios automáticos en el backend", async ({ page }) => {
     const data = await mockBackend(page);
     await page.goto("/recordatorios");
+    // Esperar a que fetchLandlordSettings complete antes de interactuar;
+    // si no, el GET /landlords/:id en vuelo puede sobrescribir el update optimista.
+    await page.waitForLoadState("networkidle");
 
     const autoSwitch = page.getByRole("switch");
     await expect(autoSwitch).toBeChecked();
