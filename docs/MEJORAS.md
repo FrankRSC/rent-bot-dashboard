@@ -15,11 +15,11 @@
 | D1 | 🔴 Crítico | Settings de notificaciones/recordatorios no se guardan (solo local) | Medio | ✅ Aplicado: toggles activos, persisten vía `PATCH /landlords/:id` (estricto) con rollback optimista; el cron del bot ya respeta las prefs (G3 cerrado) |
 | D2 | 🔴 Crítico | Recordatorios "enviados" viven en `localStorage`, no en el backend | Medio | ✅ Aplicado: envío real con `POST /tenants/:id/reminder` + `lastReminderAt` del servidor; marcas de `localStorage` eliminadas (G5 cerrado) |
 | D3 | 🟠 Alto | Estado del bot es un `true` hardcodeado, no un health real | Bajo | ✅ Aplicado: `botStatus` con `checkBackendHealth` cada 30 s (fallback a `/landlords/:id` mientras no exista `/health`) |
-| D4 | 🟠 Alto | Auth ausente + `landlordId` hardcodeado y duplicado | Medio | 🔶 Parcial: `landlordId` centralizado en el store; login/JWT pendiente del backend (N11) |
+| D4 | 🟠 Alto | Auth ausente + `landlordId` hardcodeado y duplicado | Medio | ✅ Aplicado: login real con BFF + cookie httpOnly + proxy guard; `landlordId` derivado de `GET /me`; `NEXT_PUBLIC_LANDLORD_ID` eliminado; JwtAuthGuard expandido a todas las rutas del backend (excepto webhook y alta de landlord). |
 | D5 | 🟠 Alto | Errores de guardado silenciados (el usuario no se entera) | Bajo | ✅ Aplicado: errores inline en configuración, cero `catch {}` (regla eslint `no-empty`) |
 | D6 | 🟡 Medio | Carga de datos redundante (N+1 + doble fetch de inquilinos) | Medio | ✅ Aplicado: `fetchAllTenants` como fuente única, N+1 eliminado, sin waterfall |
-| D7 | 🟡 Medio | Tipos duplicados a mano → drift con el backend | Medio | 🔶 Parcial: `OcrData`/`CepResponse`/`CancelFacturaResponse` tipados; generación desde OpenAPI pendiente del backend (Q9) |
-| D8 | 🟡 Medio | Todo client-side: sin Server Components ni caché | Medio | ⬜ Pendiente (decisión de arquitectura; ver AGENTS.md) |
+| D7 | 🟡 Medio | Tipos duplicados a mano → drift con el backend | Medio | ✅ Aplicado: `openapi-typescript` genera `src/lib/backend-schema.ts` desde `/docs-json`; guardia de drift en `backend-schema.check.ts`; `npm run openapi:types` para regenerar. |
+| D8 | 🟡 Medio | Todo client-side: sin Server Components ni caché | Medio | ✅ Aplicado: Dashboard, Pagos, Propiedades, Facturas y Reportes son Server Components; `src/lib/server-api.ts` hace el fetch inicial desde el servidor con cookie httpOnly; views cliente reciben `initialData`. |
 | D9 | 🟡 Medio | `ConnectionBanner` no cubre todos los estados de error | Bajo | ✅ Aplicado: cubre los 4 estados + botón "Reintentar" selectivo |
 | D10 | 🔵 Mejora | Proxy `/api` y config hardcodeada a `localhost:3001` | Bajo | ✅ Aplicado: `BACKEND_URL` en `next.config.ts`, `BASE` default `/api`, `.env.example` |
 
@@ -181,22 +181,15 @@ Los contratos divergen silenciosamente. Es la causa típica de bugs "funcionaba 
 
 ---
 
-## D8 🟡 Todo client-side: sin Server Components ni caché
+## D8 ✅ Server Components aplicados (2026-07-26)
 
-### Problema
-Toda la data se carga en el cliente con `"use client"` + `useEffect` + zustand (`DataBootstrap`, cada página). No se aprovecha el App Router de Next 16 (Server Components, fetch en servidor, caché). Hay un *waterfall*: `fetchProperties().then(fetchTenants)` es secuencial.
+Dashboard, Pagos, Propiedades, Facturas y Reportes son **Server Components** que hacen el fetch inicial en el servidor usando `src/lib/server-api.ts`. La capa lee la cookie httpOnly `rc_token` y llama a `BACKEND_URL` directamente con `Authorization: Bearer`, sin pasar por el BFF. Las vistas cliente reciben los datos como props (`initialData`) y los muestran en el primer render sin parpadeo.
 
-### Por qué importa
-Primer render más lento (pantalla vacía hasta que resuelven los fetch del cliente) y más carga en el navegador.
+- Sin caché (`cache: "no-store"`) — los datos de renta cambian con frecuencia.
+- Fallback gracioso: si no hay sesión válida o el backend no responde en 4 s, `serverFetch` devuelve `null` y la vista hace el fetch del cliente como antes.
+- `DataBootstrap` sigue activo para hidratar el store (settings, landlordId) en el cliente.
 
-### Pasos
-**Paso 1 — Carga inicial en el servidor.** Para páginas como Dashboard/Reportes, haz el fetch inicial en un Server Component (o route handler) y pasa los datos ya hidratados. Reduce el waterfall y mejora el *first paint*.
-
-**Paso 2 — Considerar React Query/SWR** para caché, dedupe y revalidación en las partes interactivas, en vez de refetch manual en cada montaje.
-
-**Paso 3 — Respetar `AGENTS.md`.** El proyecto avisa que este Next tiene cambios importantes; lee `node_modules/next/dist/docs/` antes de tocar routing/data fetching.
-
-**Verificar:** el Dashboard pinta datos en el primer render sin parpadeo de "cargando".
+**Verificado:** build muestra `ƒ (Dynamic) server-rendered on demand` para las 5 páginas principales.
 
 ---
 
