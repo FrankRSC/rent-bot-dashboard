@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { Menu, LogOut, ShieldAlert } from "lucide-react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Breadcrumb } from "@/components/layout/Breadcrumb";
@@ -9,13 +10,35 @@ import { ConnectionBanner } from "@/components/layout/ConnectionBanner";
 import { AuthGate } from "@/components/layout/AuthGate";
 import { useStore } from "@/store/useStore";
 
+// Rutas que pertenecen al contexto de arrendador (no de admin).
+const LANDLORD_PREFIXES = [
+  "/dashboard",
+  "/propiedades",
+  "/pagos",
+  "/reportes",
+  "/recordatorios",
+  "/facturas",
+  "/configuracion",
+];
+
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { logout, endImpersonation, impersonatedBy, settings } = useStore();
+  const { logout, endImpersonation, impersonatedBy, settings, isAdmin, authReady } = useStore();
+  const pathname = usePathname();
+  const router = useRouter();
+
+  // Admin puro (no impersonando) que llega a una ruta de arrendador por URL
+  // directa → redirige a su pantalla de inicio.
+  useEffect(() => {
+    if (!authReady || !isAdmin) return;
+    if (LANDLORD_PREFIXES.some((p) => pathname.startsWith(p))) {
+      router.replace("/admin/metricas");
+    }
+  }, [authReady, isAdmin, pathname, router]);
 
   return (
     <AuthGate>

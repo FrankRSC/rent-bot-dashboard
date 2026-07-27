@@ -56,9 +56,11 @@ export function Sidebar({ open, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { settings, isAdmin } = useStore();
 
-  const navItems = BASE_NAV.filter(
-    (item) => !item.feature || settings[item.feature]
-  );
+  // Admin puro: solo nav de administración. Al impersonar, isAdmin=false
+  // (el token cambia al del arrendador), así que vuelve a ver BASE_NAV.
+  const navItems = isAdmin
+    ? ADMIN_NAV
+    : BASE_NAV.filter((item) => !item.feature || settings[item.feature]);
 
   return (
     <aside
@@ -114,35 +116,6 @@ export function Sidebar({ open, onClose }: SidebarProps) {
             </Link>
           );
         })}
-
-        {isAdmin && (
-          <div className="pt-3">
-            <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-widest text-slate-600">
-              Admin
-            </p>
-            {ADMIN_NAV.map((item) => {
-              const isActive =
-                pathname === item.href || pathname.startsWith(item.href + "/");
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={onClose}
-                  className={cn(
-                    "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                    isActive
-                      ? "bg-[#2952F3] text-white"
-                      : "text-slate-400 hover:bg-white/10 hover:text-slate-100"
-                  )}
-                >
-                  <Icon className="w-4 h-4 shrink-0" />
-                  {item.label}
-                </Link>
-              );
-            })}
-          </div>
-        )}
       </nav>
 
       {/* User info */}
@@ -157,7 +130,9 @@ export function Sidebar({ open, onClose }: SidebarProps) {
             <span className="text-sm font-medium text-slate-200 truncate">
               {settings.landlordName || "—"}
             </span>
-            <span className="text-xs text-slate-500 truncate">Arrendador</span>
+            <span className="text-xs text-slate-500 truncate">
+              {isAdmin ? "Super Admin" : "Arrendador"}
+            </span>
           </div>
         </div>
       </div>
