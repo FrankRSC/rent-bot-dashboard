@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { ArrowLeft, ShieldCheck, ShieldX, Image, FileText, ScanLine, HelpCircle, Check, Globe, AlertCircle, Clock, AlertTriangle, HandCoins, Upload, UserCheck } from "lucide-react";
+import { ArrowLeft, ShieldCheck, ShieldX, Image as ImageIcon, FileText, ScanLine, HelpCircle, Check, Globe, AlertCircle, Clock, AlertTriangle, HandCoins, Upload, UserCheck } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +18,7 @@ type EventMeta = { icon: React.ElementType; color: string; label: string };
 
 function getEventMeta(event: EventType): EventMeta {
   const map: Record<EventType, EventMeta> = {
-    MEDIA_RECEIVED:     { icon: Image,       color: "text-blue-600 bg-blue-50",      label: "Imagen recibida" },
+    MEDIA_RECEIVED:     { icon: ImageIcon,   color: "text-blue-600 bg-blue-50",      label: "Imagen recibida" },
     TEXT_WITH_DATA:     { icon: FileText,    color: "text-blue-600 bg-blue-50",      label: "Texto con datos" },
     OCR_SUCCESS:        { icon: ScanLine,    color: "text-[#2952F3] bg-[#eef1fd]",   label: "Datos extraídos" },
     OCR_FAILED:         { icon: AlertCircle, color: "text-red-600 bg-red-50",        label: "Error al leer comprobante" },
@@ -38,10 +38,14 @@ function getEventMeta(event: EventType): EventMeta {
 }
 
 const KEY_LABELS: Record<string, string> = {
+  // OCR / CEP
   monto:              "Monto",
   claveRastreo:       "Clave de rastreo",
+  referencia:         "Referencia",
   bancoEmisor:        "Banco emisor",
   bancoReceptor:      "Banco receptor",
+  cuentaDestino:      "Cuenta destino",
+  fecha:              "Fecha de operación",
   nombreBeneficiario: "Beneficiario",
   nombreOrdenante:    "Ordenante",
   concepto:           "Concepto",
@@ -50,15 +54,38 @@ const KEY_LABELS: Record<string, string> = {
   receptorNombre:     "Receptor",
   fechaOperacion:     "Fecha operación",
   sello:              "Sello digital",
+  ocrMonto:           "Monto leído",
+  cepMonto:           "Monto verificado",
+  // Eventos / revisión
   reason:             "Motivo",
   field:              "Campo",
   value:              "Valor",
-  ocrMonto:           "Monto leído",
-  cepMonto:           "Monto verificado",
+  status:             "Estado",
+  error:              "Error",
+  // Pago manual (campos en ev.data de MANUAL_REGISTERED)
+  amount:             "Monto",
+  paymentDate:        "Fecha de pago",
+  billingPeriod:      "Periodo",
+  paymentMethod:      "Método de pago",
+  note:               "Nota",
+  source:             "Origen",
+  tenantId:           "Inquilino",
 };
 
 function isPrimitive(v: unknown): v is string | number | boolean {
   return v !== null && v !== undefined && v !== "" && typeof v !== "object";
+}
+
+function formatEventValue(key: string, value: string | number | boolean): string {
+  if ((key === "amount" || key === "monto") && typeof value === "number")
+    return formatMoney(value);
+  if (key === "paymentDate" && typeof value === "string")
+    return formatDay(value);
+  if (key === "paymentMethod" && typeof value === "string")
+    return METHOD_LABELS[value as ManualPaymentMethod] ?? value;
+  if (key === "field" && typeof value === "string")
+    return KEY_LABELS[value] ?? value;
+  return String(value);
 }
 
 function DataSection({ data }: { data: Record<string, unknown> }) {
@@ -89,6 +116,73 @@ const formatMoney = (n: number) =>
 /** `YYYY-MM-DD` → fecha local sin corrimiento por zona horaria. */
 const formatDay = (isoDay: string) =>
   format(new Date(`${isoDay}T00:00:00`), "dd 'de' MMMM yyyy", { locale: es });
+
+function ImageViewer({ attemptId }: { attemptId: number }) {
+  const [open, setOpen] = useState(false);
+  const [src, setSrc] = useState<string | null>(null);
+  const [mimeType, setMimeType] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [errorKind, setErrorKind] = useState<"not_found" | "error" | null>(null);
+
+  const handleOpen = async () => {
+    setOpen(true);
+    if (src) return;
+    setLoading(true);
+    setErrorKind(null);
+    try {
+      const res = await fetch(`/api/payments/${attemptId}/image`);
+      if (res.status === 404) { setErrorKind("not_found"); return; }
+      if (!res.ok) throw new Error();
+      const blob = await res.blob();
+      setMimeType(blob.type);
+      setSrc(URL.createObjectURL(blob));
+    } catch {
+      setErrorKind("error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const isPdf = mimeType === "application/pdf";
+
+  return (
+    <>
+      <button
+        onClick={handleOpen}
+        className="mt-1.5 inline-flex items-center gap-1.5 text-[11px] text-[#2952F3] hover:underline font-medium"
+      >
+        <ImageIcon className="w-3.5 h-3.5" /> Ver comprobante
+      </button>
+      {open && (
+        <Dialog open onOpenChange={() => setOpen(false)}>
+          <DialogContent className={isPdf ? "max-w-2xl" : "max-w-lg"}>
+            <DialogHeader><DialogTitle>Comprobante de pago</DialogTitle></DialogHeader>
+            <div className="flex items-center justify-center min-h-[200px]">
+              {loading && <p className="text-[13px] text-slate-400">Cargando comprobante…</p>}
+              {errorKind === "not_found" && (
+                <p className="text-[13px] text-slate-400">Este pago no tiene comprobante guardado.</p>
+              )}
+              {errorKind === "error" && (
+                <p className="text-[13px] text-red-500">No se pudo cargar el comprobante.</p>
+              )}
+              {src && isPdf && (
+                <iframe
+                  src={src}
+                  title="Comprobante de pago"
+                  className="w-full h-[500px] rounded-xl border border-slate-200"
+                />
+              )}
+              {src && !isPdf && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={src} alt="Comprobante de pago" className="max-w-full rounded-xl border border-slate-200" />
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+    </>
+  );
+}
 
 function ReviewDialog({
   attempt, action, onClose, onDone,
@@ -234,13 +328,23 @@ export default function PaymentDetailPage() {
   }
 
   if (error || !attempt) {
+    const is404 = error?.startsWith("404");
+    const is403 = error?.startsWith("403");
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-3">
         <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center">
           <AlertTriangle className="w-6 h-6 text-amber-500" />
         </div>
-        <p className="text-[15px] font-semibold text-[#0B1426]">Algo salió mal</p>
-        <p className="text-[13px] text-slate-400">No se pudieron cargar los datos. Intenta de nuevo.</p>
+        <p className="text-[15px] font-semibold text-[#0B1426]">
+          {is404 ? "Pago no encontrado" : is403 ? "Sin acceso" : "Algo salió mal"}
+        </p>
+        <p className="text-[13px] text-slate-400">
+          {is404
+            ? "Este intento de pago no existe o fue eliminado."
+            : is403
+            ? "No tienes permiso para ver este pago."
+            : "No se pudieron cargar los datos. Intenta de nuevo."}
+        </p>
         <Link href="/pagos">
           <Button variant="outline" size="sm">Volver a Pagos</Button>
         </Link>
@@ -468,13 +572,18 @@ export default function PaymentDetailPage() {
                             {format(new Date(ev.createdAt), "HH:mm:ss")}
                           </span>
                         </div>
+                        {ev.event === "MEDIA_RECEIVED" && (
+                          attempt.imageMediaId
+                            ? <ImageViewer attemptId={attempt.id} />
+                            : <p className="mt-1.5 text-[11px] text-slate-400">Imagen no disponible (pago de prueba)</p>
+                        )}
                         {ev.data && Object.keys(ev.data).length > 0 && (
                           <div className="mt-1.5 flex flex-wrap gap-1.5">
                             {Object.entries(ev.data)
                               .filter(([, v]) => isPrimitive(v))
                               .map(([key, value]) => (
                                 <span key={key} className="inline-flex items-center gap-1 text-[11px] bg-slate-100 text-slate-600 rounded-md px-2 py-0.5">
-                                  <span className="text-slate-400">{KEY_LABELS[key] ?? key}:</span> {String(value)}
+                                  <span className="text-slate-400">{KEY_LABELS[key] ?? key}:</span> {formatEventValue(key, value as string | number | boolean)}
                                 </span>
                               ))}
                           </div>
