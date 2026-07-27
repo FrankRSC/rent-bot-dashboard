@@ -32,6 +32,7 @@ const BASE_NAV = [
 ];
 
 const ADMIN_NAV = [
+  { label: "Resumen", href: "/admin", icon: LayoutDashboard },
   { label: "Métricas OCR", href: "/admin/metricas", icon: FlaskConical },
   { label: "Dataset", href: "/admin/dataset", icon: Database },
   { label: "Arrendadores", href: "/admin/arrendadores", icon: UserCog },

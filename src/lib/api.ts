@@ -13,6 +13,7 @@ import type {
   OcrMetrics,
   DatasetCase,
   AdminTenant,
+  BusinessMetrics,
 } from "@/lib/types";
 
 // El rewrite de next.config.ts resuelve `/api/:path*` → `${BACKEND_URL}/:path*`.
@@ -325,6 +326,9 @@ export const updateTenantFiscal = (
   });
 
 // ── Admin (solo super-admin, gateado por ADMIN_EMAILS en el backend) ──────────
+
+export const getBusinessMetrics = () =>
+  request<BusinessMetrics>("/landlords/admin/business-metrics");
 
 export const getOcrMetrics = () =>
   request<OcrMetrics>("/payments/metrics/ocr");

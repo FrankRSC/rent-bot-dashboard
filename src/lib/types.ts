@@ -314,6 +314,39 @@ export interface CancelFacturaResponse {
   createdAt: string; // ISO
 }
 
+// ── Admin — Métricas de negocio globales (§2.10) ─────────────────────────────
+
+export interface BusinessMetricsLandlordDetail {
+  landlordId: number;
+  landlordName: string;
+  tenantCount: number;
+  esperadoMes: number;
+  cobradoMes: number;
+  activoUltimos30Dias: boolean;
+  bot30d: number;
+  manual30d: number;
+  pctBotPct: number; // 0–100
+}
+
+export interface BusinessMetrics {
+  periodo: string; // YYYY-MM
+  cobranza: {
+    esperado: number;
+    cobrado: number;
+    tasaCobranzaPct: number; // 0–100
+  };
+  arrendadores: {
+    total: number;
+    activosUltimos30Dias: number;
+    inactivos: number;
+    detalle: BusinessMetricsLandlordDetail[];
+  };
+  adopcionBot: {
+    ventanaDias: number;
+    global: { bot: number; manual: number; pctBotPct: number };
+  };
+}
+
 // ── Admin — OCR / Dataset (solo super-admin) ─────────────────────────────────
 
 export interface OcrMethodStat {

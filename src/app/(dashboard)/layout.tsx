@@ -36,7 +36,7 @@ export default function DashboardLayout({
   useEffect(() => {
     if (!authReady || !isAdmin) return;
     if (LANDLORD_PREFIXES.some((p) => pathname.startsWith(p))) {
-      router.replace("/admin/metricas");
+      router.replace("/admin");
     }
   }, [authReady, isAdmin, pathname, router]);
 
