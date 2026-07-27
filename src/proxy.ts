@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
  */
 const TOKEN_COOKIE = "rc_token";
 
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   if (!req.cookies.has(TOKEN_COOKIE)) {
     const url = req.nextUrl.clone();
     url.pathname = "/login";
