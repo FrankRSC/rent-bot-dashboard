@@ -21,6 +21,19 @@ import type { AccountType, TenantWithStatus } from "@/lib/types";
 import { PaymentStatusBadge } from "@/components/ui/StatusBadge";
 import * as api from "@/lib/api";
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function apiError(err: unknown): string {
+  if (!(err instanceof Error)) return "Error al guardar";
+  const body = err.message.replace(/^\d+:\s*/, "");
+  try {
+    const p = JSON.parse(body) as { message?: unknown };
+    const m = p.message;
+    if (Array.isArray(m)) return (m as string[]).join(", ");
+    if (typeof m === "string") return m;
+  } catch { /* fall through */ }
+  return "Error al guardar. Inténtalo de nuevo.";
+}
+
 // ── Vigencia de contrato y ajuste de renta (§2.3 CONTRATOS_API.md) ───────────
 type ContractValues = {
   contractStartDate: string;
@@ -65,6 +78,7 @@ function ContractFields({ values, onChange }: { values: ContractValues; onChange
 function AddTenantDialog({ open, propertyId, onClose }: { open: boolean; propertyId: number; onClose: () => void }) {
   const { createTenant } = useStore();
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: "",
     phone: "",
@@ -81,6 +95,7 @@ function AddTenantDialog({ open, propertyId, onClose }: { open: boolean; propert
   const handleSubmit = async () => {
     if (!form.name || !form.phone) return;
     setSaving(true);
+    setSaveError(null);
     try {
       await createTenant(propertyId, {
         name: form.name,
@@ -96,8 +111,8 @@ function AddTenantDialog({ open, propertyId, onClose }: { open: boolean; propert
       });
       onClose();
       setForm({ name: "", phone: "", paymentDay: "", monthlyAmount: "", destinationAccount: "", destinationAccountType: "CLABE", contractStartDate: "", contractEndDate: "", nextMonthlyAmount: "", adjustmentDate: "" });
-    } catch {
-      // silenciado
+    } catch (err) {
+      setSaveError(apiError(err));
     } finally {
       setSaving(false);
     }
@@ -147,6 +162,7 @@ function AddTenantDialog({ open, propertyId, onClose }: { open: boolean; propert
             </div>
           </div>
           <ContractFields values={form} onChange={(patch) => setForm({ ...form, ...patch })} />
+          {saveError && <p className="text-xs text-red-600">{saveError}</p>}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={saving}>Cancelar</Button>
@@ -162,6 +178,7 @@ function AddTenantDialog({ open, propertyId, onClose }: { open: boolean; propert
 function EditTenantDialog({ tenant, onClose }: { tenant: TenantWithStatus; onClose: () => void }) {
   const { updateTenant } = useStore();
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: tenant.name,
     phone: tenant.phone,
@@ -178,6 +195,7 @@ function EditTenantDialog({ tenant, onClose }: { tenant: TenantWithStatus; onClo
 
   const handleSubmit = async () => {
     setSaving(true);
+    setSaveError(null);
     try {
       await updateTenant(tenant.id, {
         name: form.name,
@@ -195,8 +213,11 @@ function EditTenantDialog({ tenant, onClose }: { tenant: TenantWithStatus; onClo
         await api.updateTenantFiscal(tenant.id, { rfc: form.rfc || undefined });
       }
       onClose();
-    } catch { /* silenciado */ }
-    finally { setSaving(false); }
+    } catch (err) {
+      setSaveError(apiError(err));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -248,8 +269,9 @@ function EditTenantDialog({ tenant, onClose }: { tenant: TenantWithStatus; onClo
               <FileText className="w-3.5 h-3.5 text-slate-400" />
               RFC (opcional, para facturación)
             </label>
-            <Input placeholder="XAXX010101000" value={form.rfc} onChange={(e) => setForm({ ...form, rfc: e.target.value })} className="font-mono" />
+            <Input placeholder="XAXX010101000" value={form.rfc} onChange={(e) => { setForm({ ...form, rfc: e.target.value }); setSaveError(null); }} className="font-mono" />
           </div>
+          {saveError && <p className="text-xs text-red-600">{saveError}</p>}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={saving}>Cancelar</Button>

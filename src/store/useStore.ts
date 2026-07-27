@@ -42,6 +42,8 @@ interface AppState {
   landlordId: number;
   authenticated: boolean;
   authReady: boolean;
+  isAdmin: boolean;
+  impersonatedBy: string | null; // email del admin cuando el token es de impersonación
   properties: Property[];
   tenants: Tenant[];
   allTenants: Tenant[];
@@ -60,6 +62,7 @@ interface AppState {
   hydrateAuth: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  endImpersonation: () => Promise<void>;
 
   fetchProperties: () => Promise<void>;
   fetchAllTenants: () => Promise<void>;
@@ -103,6 +106,8 @@ export const useStore = create<AppState>((set, get) => ({
   landlordId: 0,
   authenticated: false,
   authReady: false,
+  isAdmin: false,
+  impersonatedBy: null,
   properties: [],
   tenants: [],
   allTenants: [],
@@ -140,12 +145,18 @@ export const useStore = create<AppState>((set, get) => ({
   hydrateAuth: async () => {
     try {
       const me = await api.getMe();
-      set({ authenticated: true, landlordId: me.id, authReady: true });
+      set({
+        authenticated: true,
+        landlordId: me.id,
+        isAdmin: me.isAdmin ?? false,
+        impersonatedBy: me.impersonatedBy ?? null,
+        authReady: true,
+      });
     } catch (e) {
       const msg = (e as Error).message ?? "";
       if (msg.startsWith("401")) {
         // Sin cookie válida: no hay sesión → a login.
-        set({ authenticated: false, landlordId: 0, authReady: true });
+        set({ authenticated: false, landlordId: 0, isAdmin: false, impersonatedBy: null, authReady: true });
       } else {
         // Backend caído / error transitorio: no expulsamos por un 5xx/red;
         // dejamos entrar (optimista) para que el dashboard muestre el banner.
@@ -155,8 +166,16 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   login: async (email, password) => {
-    const { landlord } = await api.login(email, password);
-    set({ authenticated: true, landlordId: landlord.id, authReady: true });
+    await api.login(email, password);
+    // GET /me tras el login para obtener landlordId e isAdmin en un solo paso.
+    const me = await api.getMe();
+    set({
+      authenticated: true,
+      landlordId: me.id,
+      isAdmin: me.isAdmin ?? false,
+      impersonatedBy: me.impersonatedBy ?? null,
+      authReady: true,
+    });
   },
 
   logout: async () => {
@@ -165,8 +184,14 @@ export const useStore = create<AppState>((set, get) => ({
     } catch {
       // Aunque el logout del servidor falle, limpiamos el estado local igual.
     }
-    set({ authenticated: false, landlordId: 0 });
+    set({ authenticated: false, landlordId: 0, isAdmin: false, impersonatedBy: null });
     if (typeof window !== "undefined") window.location.href = "/login";
+  },
+
+  endImpersonation: async () => {
+    await api.endImpersonation();
+    await get().hydrateAuth();
+    if (typeof window !== "undefined") window.location.href = "/admin/arrendadores";
   },
 
   fetchProperties: async () => {

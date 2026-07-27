@@ -10,6 +10,9 @@ import type {
   PeriodBalance,
   ReceiptFields,
   ReceiptValidationResult,
+  OcrMetrics,
+  DatasetCase,
+  AdminTenant,
 } from "@/lib/types";
 
 // El rewrite de next.config.ts resuelve `/api/:path*` → `${BACKEND_URL}/:path*`.
@@ -320,3 +323,23 @@ export const updateTenantFiscal = (
     method: "PATCH",
     body: JSON.stringify(data),
   });
+
+// ── Admin (solo super-admin, gateado por ADMIN_EMAILS en el backend) ──────────
+
+export const getOcrMetrics = () =>
+  request<OcrMetrics>("/payments/metrics/ocr");
+
+export const getDatasetCases = () =>
+  request<DatasetCase[]>("/ocr/dataset-cases");
+
+export const getLandlords = () =>
+  request<Landlord[]>("/landlords");
+
+export const getAllTenantsAdmin = () =>
+  request<AdminTenant[]>("/landlords/admin/tenants");
+
+export const impersonateLandlord = (landlordId: number) =>
+  request<{ landlord: Landlord }>(`/auth/impersonate/${landlordId}`, { method: "POST" });
+
+export const endImpersonation = () =>
+  request<void>("/auth/impersonate/end", { method: "POST" });

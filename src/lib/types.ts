@@ -36,6 +36,8 @@ export interface Landlord {
   phone: string;
   isActive: boolean;
   createdAt: string;
+  isAdmin?: boolean;
+  impersonatedBy?: string | null; // email del admin cuando el token es de impersonación
   ownerBank?: string;
   beneficiaryAccount?: string;
   beneficiaryAccountType?: string;
@@ -157,6 +159,7 @@ export interface PaymentAttempt {
   completedAt?: string;
   events: PaymentEvent[];
   tenant?: Tenant;
+  imageMediaId?: string | null;
   // Modo manual (docs/CONTRATOS_API.md §2.7)
   source: PaymentSource; // quién originó el intento
   amount?: number | null; // monto capturado a mano (los del bot lo llevan en ocrData.monto)
@@ -164,6 +167,8 @@ export interface PaymentAttempt {
   paymentDate?: string | null; // YYYY-MM-DD
   billingPeriod?: string | null; // YYYY-MM — periodo de renta que cubre
   note?: string | null;
+  // Deduplicación de comprobantes (§2.4)
+  claveRastreo?: string | null; // null para intrabancarias sin CEP
 }
 
 // ── Modo manual (docs/CONTRATOS_API.md §2.7) ─────────────────────────────────
@@ -307,4 +312,59 @@ export interface CancelFacturaResponse {
   providerResponse?: Record<string, unknown> | null;
   errorMessage?: string | null; // poblado si status === "ERROR"
   createdAt: string; // ISO
+}
+
+// ── Admin — OCR / Dataset (solo super-admin) ─────────────────────────────────
+
+export interface OcrMethodStat {
+  methodUsed: string;
+  total: number;
+  success: number;
+  successRate: number; // 0–100, ya redondeado
+}
+
+export interface OcrSummaryBucket {
+  total: number;
+  success: number;
+  successRate: number;
+}
+
+export interface OcrMetrics {
+  byMethod: OcrMethodStat[];
+  summary: {
+    ocrOnly: OcrSummaryBucket;
+    aiInvolved: OcrSummaryBucket;
+  };
+}
+
+export interface ExtractionFields {
+  fecha?: string | null;
+  monto?: string | null; // string decimal, ej. "1250.00"
+  methodUsed?: string | null;
+  referencia?: string | null;
+  bancoEmisor?: string | null;
+  claveRastreo?: string | null;
+  bancoReceptor?: string | null;
+  cuentaDestino?: string | null;
+  isIntrabancario?: boolean | null;
+  ocrCuentaDestino?: string | null;
+}
+
+export interface AdminTenant extends Tenant {
+  landlordId: number;
+  landlordName: string;
+}
+
+export type DatasetCaseSource = "complete" | "review";
+
+export interface DatasetCase {
+  id: number;
+  attemptId: number;
+  methodUsed: string;
+  rawText: string | null;
+  originalExtraction: ExtractionFields;
+  correctedValues: ExtractionFields;
+  correctedFields: string[]; // subset de keys que realmente cambiaron
+  source: DatasetCaseSource;
+  createdAt: string;
 }
