@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Menu, LogOut } from "lucide-react";
+import { Menu, LogOut, ShieldAlert } from "lucide-react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Breadcrumb } from "@/components/layout/Breadcrumb";
 import { DataBootstrap } from "@/components/layout/DataBootstrap";
@@ -15,11 +15,11 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const logout = useStore((s) => s.logout);
+  const { logout, endImpersonation, impersonatedBy, settings } = useStore();
 
   return (
     <AuthGate>
-    <div className="flex min-h-screen bg-[#F4F5F7]">
+    <div className="flex h-screen overflow-hidden bg-[#F4F5F7]">
       <DataBootstrap />
 
       {sidebarOpen && (
@@ -50,7 +50,23 @@ export default function DashboardLayout({
           </button>
         </header>
         <ConnectionBanner />
-        <main className="flex-1 p-4 sm:p-6 overflow-auto">{children}</main>
+        {impersonatedBy && (
+          <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center gap-2.5 text-[13px]">
+            <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
+            <span className="text-amber-800">
+              Sesión de impersonación — estás viendo como{" "}
+              <strong>{settings.landlordName || "este arrendador"}</strong>.
+              Admin activo: <span className="font-mono">{impersonatedBy}</span>
+            </span>
+            <button
+              onClick={endImpersonation}
+              className="ml-auto text-amber-700 hover:text-amber-900 underline text-[12px] font-medium whitespace-nowrap"
+            >
+              Volver a admin
+            </button>
+          </div>
+        )}
+        <main className="flex-1 p-4 sm:p-6 overflow-y-auto dashboard-scroll">{children}</main>
       </div>
     </div>
     </AuthGate>

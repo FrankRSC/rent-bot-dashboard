@@ -129,7 +129,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch: operations["FacturasController_updateTenantFiscal"];
+        patch: operations["TenantsController_updateFiscal"];
         trace?: never;
     };
     "/payments/manual": {
@@ -477,6 +477,21 @@ export interface components {
             bancoEmisor: string;
         };
         Tenant: {
+            /**
+             * Format: date
+             * @example 2026-08-01
+             */
+            contractStartDate: string | null;
+            /**
+             * Format: date
+             * @example 2027-08-01
+             */
+            contractEndDate: string | null;
+            /**
+             * Format: date
+             * @example 2026-09-01
+             */
+            adjustmentDate: string | null;
             id: number;
             name: string;
             phone: string;
@@ -488,13 +503,7 @@ export interface components {
             rfc: string;
             taxRegime: string;
             zipCode: string;
-            /** Format: date-time */
-            contractStartDate: string | null;
-            /** Format: date-time */
-            contractEndDate: string | null;
             nextMonthlyAmount: number | null;
-            /** Format: date-time */
-            adjustmentDate: string | null;
             /** Format: date-time */
             lastReminderAt: string | null;
             /** Format: date-time */
@@ -556,6 +565,11 @@ export interface components {
             contractEndDate?: string;
             nextMonthlyAmount?: number;
             adjustmentDate?: string;
+            rfc?: string;
+            taxRegime?: string;
+            zipCode?: string;
+        };
+        UpdateTenantFiscalDto: {
             rfc?: string;
             taxRegime?: string;
             zipCode?: string;
@@ -703,11 +717,6 @@ export interface components {
             taxRegime: string;
             zipCode: string;
             fiscalName?: string;
-        };
-        UpdateTenantFiscalDto: {
-            rfc?: string;
-            taxRegime?: string;
-            zipCode?: string;
         };
         LoginDto: {
             /** Format: email */
@@ -1044,7 +1053,7 @@ export interface operations {
             };
         };
     };
-    FacturasController_updateTenantFiscal: {
+    TenantsController_updateFiscal: {
         parameters: {
             query?: never;
             header?: never;
