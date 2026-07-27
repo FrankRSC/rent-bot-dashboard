@@ -129,3 +129,41 @@
     @apply font-sans;
   }
 }
+
+/* Scrollbar delgado — panel de contenido (fondo claro) */
+.dashboard-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(203 213 225) transparent;
+}
+.dashboard-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.dashboard-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.dashboard-scroll::-webkit-scrollbar-thumb {
+  background: rgb(203 213 225);
+  border-radius: 9999px;
+}
+.dashboard-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgb(148 163 184);
+}
+
+/* Scrollbar delgado — sidebar (fondo oscuro) */
+.sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255 255 255 / 0.12) transparent;
+}
+.sidebar-scroll::-webkit-scrollbar {
+  width: 3px;
+}
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+}
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
