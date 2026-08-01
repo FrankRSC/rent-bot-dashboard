@@ -117,7 +117,7 @@ export default function InquilinosAdminPage() {
 
         {data && data.length > 0 && filtered.length === 0 && (
           <div className="p-10 text-center">
-            <p className="text-[13px] text-slate-400">Sin resultados para "{query}".</p>
+            <p className="text-[13px] text-slate-400">Sin resultados para &ldquo;{query}&rdquo;.</p>
           </div>
         )}
 

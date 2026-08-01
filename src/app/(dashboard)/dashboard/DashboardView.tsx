@@ -186,7 +186,7 @@ export function DashboardView({ initialTenants, initialPayments, initialProperti
       >
 
         {/* Top bar */}
-        <div className="flex items-center justify-between px-6 pt-5 pb-0">
+        <div className="flex flex-col gap-2 px-4 pt-4 pb-0 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:pt-5">
           <div className="flex items-center gap-3">
             <p className="text-[13px] font-semibold text-slate-600 capitalize">{monthLabel}</p>
             <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
@@ -214,7 +214,7 @@ export function DashboardView({ initialTenants, initialPayments, initialProperti
         </div>
 
         {/* Main content */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 px-6 py-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 px-4 sm:px-6 py-6">
 
           {/* Left: Big number */}
           <div className="flex-1 min-w-0">
@@ -247,7 +247,7 @@ export function DashboardView({ initialTenants, initialPayments, initialProperti
                   style={{ width: `${paidPercent}%` }}
                 />
               </div>
-              <div className="flex gap-4 text-[12px]">
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px]">
                 {cobradoCount > 0 && (
                   <span className="text-emerald-600 font-medium">
                     {cobradoCount} cobrado{cobradoCount !== 1 ? "s" : ""}
@@ -303,12 +303,12 @@ export function DashboardView({ initialTenants, initialPayments, initialProperti
           style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <div className="flex flex-col gap-2 px-4 py-4 border-b border-slate-100 sm:flex-row sm:items-center sm:justify-between sm:px-6">
             <div>
               <h2 className="text-[14px] font-semibold text-[#0B1426]">Estado de contratos</h2>
               <p className="text-[12px] text-slate-400 mt-0.5 capitalize">{monthLabel}</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               {vencidoCount > 0 && (
                 <span className="inline-flex items-center gap-1 bg-red-50 border border-red-200 text-red-600 text-[11px] font-semibold px-2.5 py-1 rounded-full">
                   <AlertCircle className="w-3 h-3" /> {vencidoCount} vencido{vencidoCount !== 1 ? "s" : ""}
@@ -433,7 +433,7 @@ export function DashboardView({ initialTenants, initialPayments, initialProperti
 
           {/* Footer */}
           {sortedTenants.length > 0 && (
-            <div className="flex items-center justify-between px-6 py-3.5 bg-slate-50/60 border-t border-slate-100">
+            <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 bg-slate-50/60 border-t border-slate-100">
               <div className="flex items-center gap-3">
                 <span className="inline-flex items-center gap-1.5 text-[12px] text-emerald-600 font-medium">
                   <CheckCircle2 className="w-3.5 h-3.5" />

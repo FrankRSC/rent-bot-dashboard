@@ -103,14 +103,14 @@ export function PropiedadesView({ initialProperties, initialTenants }: Propiedad
     <div className="space-y-5">
 
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
           <h1 className="text-[22px] font-bold text-[#0B1426] tracking-tight">Propiedades</h1>
           <p className="text-sm text-slate-400 mt-0.5">
             {properties.length} propiedad{properties.length !== 1 ? "es" : ""} registrada{properties.length !== 1 ? "s" : ""}
           </p>
         </div>
-        <Button onClick={() => setDialogOpen(true)} className="bg-[#2952F3] hover:bg-[#1e3fd4] gap-2">
+        <Button onClick={() => setDialogOpen(true)} className="bg-[#2952F3] hover:bg-[#1e3fd4] gap-2 shrink-0">
           <Plus className="w-4 h-4" /> Nueva propiedad
         </Button>
       </div>
@@ -118,17 +118,17 @@ export function PropiedadesView({ initialProperties, initialTenants }: Propiedad
       {/* Stats strip */}
       {properties.length > 0 && (
         <div
-          className="bg-white rounded-2xl border border-slate-200/80 grid grid-cols-3 overflow-hidden"
+          className="bg-white rounded-2xl border border-slate-200/80 grid grid-cols-1 sm:grid-cols-3 overflow-hidden"
           style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
         >
-          <div className="px-6 py-4 border-r border-slate-100">
+          <div className="px-6 py-4 border-b sm:border-b-0 sm:border-r border-slate-100">
             <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400 mb-1.5">Inquilinos</p>
             <p className="text-[24px] font-bold text-[#0B1426] leading-none">{tenantsWithStatus.length}</p>
             <p className="text-[12px] text-slate-400 mt-1">
               {cobradoCount} al corriente
             </p>
           </div>
-          <div className="px-6 py-4 border-r border-slate-100">
+          <div className="px-6 py-4 border-b sm:border-b-0 sm:border-r border-slate-100">
             <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400 mb-1.5">Renta mensual</p>
             <p className="text-[24px] font-bold text-[#0B1426] leading-none tabular-nums">
               {formatCurrency(totalRenta).replace(/\.\d+$/, "")}

@@ -115,7 +115,7 @@ export function ReportesView({
         style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
       >
         <div className="px-6 pt-5 pb-6">
-          <div className="flex items-center justify-between mb-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-5">
             <div>
               <h1 className="text-[22px] font-bold text-[#0B1426] tracking-tight">Reportes</h1>
               <p className="text-[13px] text-slate-400 mt-0.5 capitalize">{monthLabelCap}</p>
@@ -226,30 +226,35 @@ export function ReportesView({
         <div className="px-6 py-4 border-b border-slate-100">
           <p className="text-[14px] font-semibold text-[#0B1426]">Por propiedad</p>
         </div>
-        <div className="grid grid-cols-[1fr_auto_auto_auto_auto_160px] gap-x-4 px-6 py-2.5 border-b border-slate-100 bg-slate-50/50">
-          {["Propiedad", "Cobrado", "Pagados", "Pendientes", "Vencidos", "% Cobro"].map((h) => (
-            <p key={h} className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest">{h}</p>
-          ))}
-        </div>
-        <div className="divide-y divide-slate-100">
-          {byProperty.map((row) => (
-            <div key={row.propertyId} className="grid grid-cols-[1fr_auto_auto_auto_auto_160px] gap-x-4 items-center px-6 py-3.5">
-              <p className="text-[13px] font-medium text-[#0B1426] truncate">{row.propertyName}</p>
-              <p className="text-[13px] font-semibold text-[#047857] tabular-nums">{formatCurrency(row.totalCobrado)}</p>
-              <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap">{row.cobradoCount} pag.</span>
-              <span className={cn("text-[11px] font-semibold rounded-full px-2 py-0.5 whitespace-nowrap",
-                row.pendienteCount > 0 ? "text-amber-700 bg-amber-50 border border-amber-200" : "text-slate-400"
-              )}>{row.pendienteCount > 0 ? `${row.pendienteCount} pend.` : "—"}</span>
-              <span className={cn("text-[11px] font-semibold rounded-full px-2 py-0.5 whitespace-nowrap",
-                row.vencidoCount > 0 ? "text-red-700 bg-red-50 border border-red-200" : "text-slate-400"
-              )}>{row.vencidoCount > 0 ? `${row.vencidoCount} venc.` : "—"}</span>
-              <ProgressBar percent={row.paidPercent} />
+        {byProperty.length === 0 ? (
+          <p className="text-[13px] text-slate-400 text-center py-8">Sin datos para este mes</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <div className="min-w-[640px]">
+              <div className="grid grid-cols-[1fr_auto_auto_auto_auto_160px] gap-x-4 px-6 py-2.5 border-b border-slate-100 bg-slate-50/50">
+                {["Propiedad", "Cobrado", "Pagados", "Pendientes", "Vencidos", "% Cobro"].map((h) => (
+                  <p key={h} className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest">{h}</p>
+                ))}
+              </div>
+              <div className="divide-y divide-slate-100">
+                {byProperty.map((row) => (
+                  <div key={row.propertyId} className="grid grid-cols-[1fr_auto_auto_auto_auto_160px] gap-x-4 items-center px-6 py-3.5">
+                    <p className="text-[13px] font-medium text-[#0B1426] truncate">{row.propertyName}</p>
+                    <p className="text-[13px] font-semibold text-[#047857] tabular-nums">{formatCurrency(row.totalCobrado)}</p>
+                    <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap">{row.cobradoCount} pag.</span>
+                    <span className={cn("text-[11px] font-semibold rounded-full px-2 py-0.5 whitespace-nowrap",
+                      row.pendienteCount > 0 ? "text-amber-700 bg-amber-50 border border-amber-200" : "text-slate-400"
+                    )}>{row.pendienteCount > 0 ? `${row.pendienteCount} pend.` : "—"}</span>
+                    <span className={cn("text-[11px] font-semibold rounded-full px-2 py-0.5 whitespace-nowrap",
+                      row.vencidoCount > 0 ? "text-red-700 bg-red-50 border border-red-200" : "text-slate-400"
+                    )}>{row.vencidoCount > 0 ? `${row.vencidoCount} venc.` : "—"}</span>
+                    <ProgressBar percent={row.paidPercent} />
+                  </div>
+                ))}
+              </div>
             </div>
-          ))}
-          {byProperty.length === 0 && (
-            <p className="text-[13px] text-slate-400 text-center py-8">Sin datos para este mes</p>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Por inquilino */}
@@ -260,33 +265,38 @@ export function ReportesView({
         <div className="px-6 py-4 border-b border-slate-100">
           <p className="text-[14px] font-semibold text-[#0B1426]">Por inquilino</p>
         </div>
-        <div className="grid grid-cols-[1fr_110px_70px_110px_90px_90px_100px] gap-x-3 px-6 py-2.5 border-b border-slate-100 bg-slate-50/50">
-          {["Inquilino", "Propiedad", "Día pago", "Renta mensual", "Estado", "Último pago", "Monto pagado"].map((h) => (
-            <p key={h} className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest">{h}</p>
-          ))}
-        </div>
-        <div className="divide-y divide-slate-100">
-          {byTenant.map((row) => (
-            <div key={row.tenantId} className="grid grid-cols-[1fr_110px_70px_110px_90px_90px_100px] gap-x-3 items-center px-6 py-3">
-              <p className="text-[13px] font-medium text-[#0B1426] truncate">{row.tenantName}</p>
-              <p className="text-[12px] text-slate-400 truncate">{row.propertyName}</p>
-              <p className="text-[12px] text-slate-500 text-center">{row.paymentDay ?? "—"}</p>
-              <p className="text-[12px] font-medium text-[#0B1426] tabular-nums">
-                {row.monthlyAmount ? formatCurrency(Number(row.monthlyAmount)) : "—"}
-              </p>
-              <div><PaymentStatusBadge status={row.paymentStatus} /></div>
-              <p className="text-[12px] text-slate-400">
-                {row.lastVerifiedAt ? format(new Date(row.lastVerifiedAt + ""), "dd/MM/yy") : "—"}
-              </p>
-              <p className="text-[12px] font-semibold text-[#047857] tabular-nums">
-                {row.amountPaid != null ? formatCurrency(Number(row.amountPaid)) : "—"}
-              </p>
+        {byTenant.length === 0 ? (
+          <p className="text-[13px] text-slate-400 text-center py-8">Sin datos para este mes</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <div className="min-w-[760px]">
+              <div className="grid grid-cols-[1fr_110px_70px_110px_90px_90px_100px] gap-x-3 px-6 py-2.5 border-b border-slate-100 bg-slate-50/50">
+                {["Inquilino", "Propiedad", "Día pago", "Renta mensual", "Estado", "Último pago", "Monto pagado"].map((h) => (
+                  <p key={h} className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest">{h}</p>
+                ))}
+              </div>
+              <div className="divide-y divide-slate-100">
+                {byTenant.map((row) => (
+                  <div key={row.tenantId} className="grid grid-cols-[1fr_110px_70px_110px_90px_90px_100px] gap-x-3 items-center px-6 py-3">
+                    <p className="text-[13px] font-medium text-[#0B1426] truncate">{row.tenantName}</p>
+                    <p className="text-[12px] text-slate-400 truncate">{row.propertyName}</p>
+                    <p className="text-[12px] text-slate-500 text-center">{row.paymentDay ?? "—"}</p>
+                    <p className="text-[12px] font-medium text-[#0B1426] tabular-nums">
+                      {row.monthlyAmount ? formatCurrency(Number(row.monthlyAmount)) : "—"}
+                    </p>
+                    <div><PaymentStatusBadge status={row.paymentStatus} /></div>
+                    <p className="text-[12px] text-slate-400">
+                      {row.lastVerifiedAt ? format(new Date(row.lastVerifiedAt + ""), "dd/MM/yy") : "—"}
+                    </p>
+                    <p className="text-[12px] font-semibold text-[#047857] tabular-nums">
+                      {row.amountPaid != null ? formatCurrency(Number(row.amountPaid)) : "—"}
+                    </p>
+                  </div>
+                ))}
+              </div>
             </div>
-          ))}
-          {byTenant.length === 0 && (
-            <p className="text-[13px] text-slate-400 text-center py-8">Sin datos para este mes</p>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

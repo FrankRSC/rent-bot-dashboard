@@ -219,7 +219,7 @@ export default function ConfiguracionPage() {
         className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden"
         style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-6 py-4 border-b border-slate-100">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-xl bg-[#eef1fd] flex items-center justify-center shrink-0">
               <User className="w-4 h-4 text-[#2952F3]" />
@@ -230,7 +230,7 @@ export default function ConfiguracionPage() {
             </div>
           </div>
           {!editingProfile ? (
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => {
+            <Button variant="outline" size="sm" className="gap-1.5 self-end sm:self-auto" onClick={() => {
               setProfileForm({
                 landlordName: settings.landlordName, email: settings.email, phone: settings.phone,
                 ownerBank: settings.ownerBank, beneficiaryAccount: settings.beneficiaryAccount,
@@ -241,7 +241,7 @@ export default function ConfiguracionPage() {
               <Pencil className="w-3.5 h-3.5" /> Editar
             </Button>
           ) : (
-            <div className="flex gap-2">
+            <div className="flex gap-2 self-end sm:self-auto">
               <Button variant="outline" size="sm" onClick={() => { setEditingProfile(false); setProfileError(false); }} disabled={saving}>
                 <X className="w-3.5 h-3.5 mr-1" /> Cancelar
               </Button>
@@ -393,7 +393,7 @@ export default function ConfiguracionPage() {
         className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden"
         style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-6 py-4 border-b border-slate-100">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-xl bg-[#eef1fd] flex items-center justify-center shrink-0">
               <FileText className="w-4 h-4 text-[#2952F3]" />
@@ -404,14 +404,14 @@ export default function ConfiguracionPage() {
             </div>
           </div>
           {!editingFiscal ? (
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => {
+            <Button variant="outline" size="sm" className="gap-1.5 self-end sm:self-auto" onClick={() => {
               setFiscalForm({ rfc: settings.rfc, fiscalName: settings.fiscalName, zipCode: settings.zipCode, taxRegime: settings.taxRegime });
               setEditingFiscal(true);
             }}>
               <Pencil className="w-3.5 h-3.5" /> Editar
             </Button>
           ) : (
-            <div className="flex gap-2">
+            <div className="flex gap-2 self-end sm:self-auto">
               <Button variant="outline" size="sm" onClick={() => { setEditingFiscal(false); setFiscalError(false); }} disabled={savingFiscal}>
                 <X className="w-3.5 h-3.5 mr-1" /> Cancelar
               </Button>
@@ -473,7 +473,7 @@ export default function ConfiguracionPage() {
               </div>
               <div className="space-y-1.5">
                 <label className="text-[13px] font-medium text-slate-700">Código postal</label>
-                <Input placeholder="5 dígitos" value={fiscalForm.zipCode} onChange={(e) => setFiscalForm({ ...fiscalForm, zipCode: e.target.value })} />
+                <Input placeholder="5 dígitos" inputMode="numeric" maxLength={5} value={fiscalForm.zipCode} onChange={(e) => { const v = e.target.value.replace(/\D/g, ""); setFiscalForm({ ...fiscalForm, zipCode: v }); }} />
               </div>
               <div className="space-y-1.5">
                 <label className="text-[13px] font-medium text-slate-700">Régimen fiscal</label>

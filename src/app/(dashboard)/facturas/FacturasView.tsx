@@ -232,12 +232,12 @@ export function FacturasView({ initialFacturas }: FacturasViewProps) {
     <div className="space-y-5">
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-[22px] font-bold text-[#0B1426] tracking-tight">Facturas</h1>
           <p className="text-sm text-slate-400 mt-0.5">CFDI 4.0 emitidos a inquilinos</p>
         </div>
-        <Button size="sm" className="bg-[#2952F3] hover:bg-[#1e3fd4] gap-1.5" onClick={() => setIssueOpen(true)}>
+        <Button size="sm" className="bg-[#2952F3] hover:bg-[#1e3fd4] gap-1.5 self-start sm:self-auto" onClick={() => setIssueOpen(true)}>
           <Plus className="w-4 h-4" /> Nueva factura
         </Button>
       </div>
@@ -247,8 +247,8 @@ export function FacturasView({ initialFacturas }: FacturasViewProps) {
         className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden"
         style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
       >
-        <div className="grid grid-cols-3">
-          <div className="px-6 py-5 border-r border-slate-100">
+        <div className="grid grid-cols-1 sm:grid-cols-3">
+          <div className="px-6 py-5 border-b border-slate-100 sm:border-b-0 sm:border-r">
             <div className="flex items-center justify-between mb-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Total timbrado</p>
               <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center">
@@ -258,7 +258,7 @@ export function FacturasView({ initialFacturas }: FacturasViewProps) {
             <p className="text-[22px] font-bold text-[#0B1426] leading-none tabular-nums">{formatCurrency(totalStamped)}</p>
             <p className="text-[12px] text-slate-400 mt-1.5">{stampedCount} factura{stampedCount !== 1 ? "s" : ""} timbrada{stampedCount !== 1 ? "s" : ""}</p>
           </div>
-          <div className="px-6 py-5 border-r border-slate-100">
+          <div className="px-6 py-5 border-b border-slate-100 sm:border-b-0 sm:border-r">
             <div className="flex items-center justify-between mb-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Este mes</p>
               <div className="w-7 h-7 rounded-lg bg-[#eef1fd] flex items-center justify-center">

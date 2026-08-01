@@ -8,6 +8,7 @@ import { Breadcrumb } from "@/components/layout/Breadcrumb";
 import { DataBootstrap } from "@/components/layout/DataBootstrap";
 import { ConnectionBanner } from "@/components/layout/ConnectionBanner";
 import { AuthGate } from "@/components/layout/AuthGate";
+import { OnboardingWizard } from "@/components/layout/OnboardingWizard";
 import { useStore } from "@/store/useStore";
 
 // Rutas que pertenecen al contexto de arrendador (no de admin).
@@ -44,6 +45,7 @@ export default function DashboardLayout({
     <AuthGate>
     <div className="flex h-screen overflow-hidden bg-[#F4F5F7]">
       <DataBootstrap />
+      <OnboardingWizard />
 
       {sidebarOpen && (
         <div
@@ -74,16 +76,16 @@ export default function DashboardLayout({
         </header>
         <ConnectionBanner />
         {impersonatedBy && (
-          <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center gap-2.5 text-[13px]">
-            <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
-            <span className="text-amber-800">
+          <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-start sm:items-center gap-2.5 text-[12px] sm:text-[13px]">
+            <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
+            <span className="text-amber-800 flex-1 min-w-0">
               Sesión de impersonación — estás viendo como{" "}
               <strong>{settings.landlordName || "este arrendador"}</strong>.
               Admin activo: <span className="font-mono">{impersonatedBy}</span>
             </span>
             <button
               onClick={endImpersonation}
-              className="ml-auto text-amber-700 hover:text-amber-900 underline text-[12px] font-medium whitespace-nowrap"
+              className="ml-auto text-amber-700 hover:text-amber-900 underline text-[12px] font-medium whitespace-nowrap shrink-0"
             >
               Volver a admin
             </button>

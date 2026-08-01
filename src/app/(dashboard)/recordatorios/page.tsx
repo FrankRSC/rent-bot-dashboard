@@ -226,79 +226,81 @@ export default function RecordatoriosPage() {
           <p className="text-[14px] font-semibold text-[#0B1426]">Estado de recordatorios — {currentMonthLabelCap}</p>
         </div>
 
-        {/* Header row */}
-        <div className="grid grid-cols-[1fr_110px_80px_70px_110px_100px_130px] gap-x-3 px-6 py-2.5 border-b border-slate-100 bg-slate-50/50">
-          {["Nombre", "Propiedad", "Día pago", "Anticip.", "Próx. recordatorio", "Estado", "Acción"].map((h) => (
-            <p key={h} className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest">{h}</p>
-          ))}
-        </div>
-
-        <div className="divide-y divide-slate-100">
-          {tenantRows.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-14 text-center">
-              {isLoading
-                ? <Loader2 className="w-6 h-6 text-slate-300 animate-spin mb-2" />
-                : <Bell className="w-7 h-7 text-slate-300 mb-2" />}
-              <p className="text-[13px] text-slate-400">
-                {isLoading ? "Cargando inquilinos…" : "No hay inquilinos registrados"}
-              </p>
+        {tenantRows.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-14 text-center">
+            {isLoading
+              ? <Loader2 className="w-6 h-6 text-slate-300 animate-spin mb-2" />
+              : <Bell className="w-7 h-7 text-slate-300 mb-2" />}
+            <p className="text-[13px] text-slate-400">
+              {isLoading ? "Cargando inquilinos…" : "No hay inquilinos registrados"}
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <div className="min-w-[780px]">
+              <div className="grid grid-cols-[1fr_110px_80px_70px_110px_100px_130px] gap-x-3 px-6 py-2.5 border-b border-slate-100 bg-slate-50/50">
+                {["Nombre", "Propiedad", "Día pago", "Anticip.", "Próx. recordatorio", "Estado", "Acción"].map((h) => (
+                  <p key={h} className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest">{h}</p>
+                ))}
+              </div>
+              <div className="divide-y divide-slate-100">
+                {tenantRows.map((row) => (
+                  <div key={row.id} className="grid grid-cols-[1fr_110px_80px_70px_110px_100px_130px] gap-x-3 items-center px-6 py-3.5">
+                    <p className="text-[13px] font-medium text-[#0B1426] truncate">{row.name}</p>
+                    <p className="text-[12px] text-slate-400 truncate">{row.propertyName}</p>
+                    <div>
+                      <span className="text-[11px] font-semibold text-slate-600 bg-slate-100 border border-slate-200 rounded-full px-2 py-0.5 whitespace-nowrap">
+                        Día {row.paymentDay}
+                      </span>
+                    </div>
+                    <p className="text-[12px] text-slate-500">{row.daysBefore}d</p>
+                    <p className="text-[12px] text-slate-500 font-mono">{row.nextReminder}</p>
+                    <div>
+                      {row.reminderSent ? (
+                        <>
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5">
+                            <CheckCircle2 className="w-3 h-3" /> Enviado
+                          </span>
+                          {row.lastReminderAt && (
+                            <p className="text-[10px] text-slate-400 mt-1">
+                              {format(new Date(row.lastReminderAt), "dd/MM HH:mm")}
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 bg-slate-100 border border-slate-200 rounded-full px-2 py-0.5">
+                          <BellOff className="w-3 h-3" /> No enviado
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <button
+                        className={cn(
+                          "inline-flex items-center gap-1.5 text-[12px] font-medium px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap",
+                          row.paymentStatus === "Pagado" || sendingId === row.id
+                            ? "text-slate-300 cursor-not-allowed"
+                            : "text-[#2952F3] hover:bg-[#eef1fd]"
+                        )}
+                        disabled={row.paymentStatus === "Pagado" || sendingId === row.id}
+                        onClick={() => handleSend(row.id)}
+                      >
+                        {sendingId === row.id
+                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          : <Send className="w-3.5 h-3.5" />}
+                        {sendingId === row.id
+                          ? "Enviando…"
+                          : row.reminderSent ? "Reenviar" : "Enviar ahora"}
+                      </button>
+                      {rowErrors[row.id] && (
+                        <p className="text-[10px] text-red-600 mt-0.5">{rowErrors[row.id]}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
-          )}
-
-          {tenantRows.map((row) => (
-            <div key={row.id} className="grid grid-cols-[1fr_110px_80px_70px_110px_100px_130px] gap-x-3 items-center px-6 py-3.5">
-              <p className="text-[13px] font-medium text-[#0B1426] truncate">{row.name}</p>
-              <p className="text-[12px] text-slate-400 truncate">{row.propertyName}</p>
-              <div>
-                <span className="text-[11px] font-semibold text-slate-600 bg-slate-100 border border-slate-200 rounded-full px-2 py-0.5 whitespace-nowrap">
-                  Día {row.paymentDay}
-                </span>
-              </div>
-              <p className="text-[12px] text-slate-500">{row.daysBefore}d</p>
-              <p className="text-[12px] text-slate-500 font-mono">{row.nextReminder}</p>
-              <div>
-                {row.reminderSent ? (
-                  <>
-                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5">
-                      <CheckCircle2 className="w-3 h-3" /> Enviado
-                    </span>
-                    {row.lastReminderAt && (
-                      <p className="text-[10px] text-slate-400 mt-1">
-                        {format(new Date(row.lastReminderAt), "dd/MM HH:mm")}
-                      </p>
-                    )}
-                  </>
-                ) : (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 bg-slate-100 border border-slate-200 rounded-full px-2 py-0.5">
-                    <BellOff className="w-3 h-3" /> No enviado
-                  </span>
-                )}
-              </div>
-              <div>
-                <button
-                  className={cn(
-                    "inline-flex items-center gap-1.5 text-[12px] font-medium px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap",
-                    row.paymentStatus === "Pagado" || sendingId === row.id
-                      ? "text-slate-300 cursor-not-allowed"
-                      : "text-[#2952F3] hover:bg-[#eef1fd]"
-                  )}
-                  disabled={row.paymentStatus === "Pagado" || sendingId === row.id}
-                  onClick={() => handleSend(row.id)}
-                >
-                  {sendingId === row.id
-                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    : <Send className="w-3.5 h-3.5" />}
-                  {sendingId === row.id
-                    ? "Enviando…"
-                    : row.reminderSent ? "Reenviar" : "Enviar ahora"}
-                </button>
-                {rowErrors[row.id] && (
-                  <p className="text-[10px] text-red-600 mt-0.5">{rowErrors[row.id]}</p>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

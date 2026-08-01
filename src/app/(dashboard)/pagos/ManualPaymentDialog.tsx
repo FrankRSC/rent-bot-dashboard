@@ -142,6 +142,7 @@ export function ManualPaymentDialog({ open, onClose }: { open: boolean; onClose:
       <DialogContent className="max-w-sm">
         <DialogHeader><DialogTitle>Registrar pago</DialogTitle></DialogHeader>
 
+        <div className="overflow-y-auto flex-1 min-h-0 px-4 pb-2">
         {result ? (
           <SuccessSummary balance={result} />
         ) : (
@@ -210,6 +211,7 @@ export function ManualPaymentDialog({ open, onClose }: { open: boolean; onClose:
             )}
           </div>
         )}
+        </div>
 
         <DialogFooter>
           {result ? (

@@ -157,7 +157,7 @@ function ImageViewer({ attemptId }: { attemptId: number }) {
         <Dialog open onOpenChange={() => setOpen(false)}>
           <DialogContent className={isPdf ? "max-w-2xl" : "max-w-lg"}>
             <DialogHeader><DialogTitle>Comprobante de pago</DialogTitle></DialogHeader>
-            <div className="flex items-center justify-center min-h-[200px]">
+            <div className="overflow-y-auto flex-1 min-h-0 px-4 pb-4 flex items-center justify-center">
               {loading && <p className="text-[13px] text-slate-400">Cargando comprobante…</p>}
               {errorKind === "not_found" && (
                 <p className="text-[13px] text-slate-400">Este pago no tiene comprobante guardado.</p>
@@ -169,12 +169,12 @@ function ImageViewer({ attemptId }: { attemptId: number }) {
                 <iframe
                   src={src}
                   title="Comprobante de pago"
-                  className="w-full h-[500px] rounded-xl border border-slate-200"
+                  className="w-full h-[60dvh] rounded-xl border border-slate-200"
                 />
               )}
               {src && !isPdf && (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={src} alt="Comprobante de pago" className="max-w-full rounded-xl border border-slate-200" />
+                <img src={src} alt="Comprobante de pago" className="max-w-full max-h-[70dvh] object-contain rounded-xl border border-slate-200" />
               )}
             </div>
           </DialogContent>
@@ -232,7 +232,7 @@ function ReviewDialog({
               : <>El intento <span className="font-semibold">#{attempt.id}</span> se marcará como <span className="font-semibold text-red-600">rechazado</span>.</>}
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 py-2">
+        <div className="overflow-y-auto flex-1 min-h-0 px-4 py-2 space-y-4">
           {isApprove && (
             <>
               <div className="space-y-1.5">
@@ -377,7 +377,7 @@ export default function PaymentDetailPage() {
         className="bg-white rounded-2xl overflow-hidden border border-slate-200/80"
         style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
       >
-        <div className="px-6 pt-5 pb-6">
+        <div className="px-4 pt-4 pb-5 sm:px-6 sm:pt-5 sm:pb-6">
           <div className="flex items-start gap-3 mb-5">
             <Link href="/pagos">
               <button className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors mt-0.5 shrink-0">
@@ -399,7 +399,7 @@ export default function PaymentDetailPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="bg-slate-50 rounded-xl px-4 py-3">
               <p className="text-[11px] text-slate-400 uppercase tracking-widest font-semibold mb-1">Recibido</p>
               <p className="text-[14px] font-semibold text-[#0B1426]">
@@ -419,7 +419,7 @@ export default function PaymentDetailPage() {
           </div>
 
           {(canApprove || canReject) && (
-            <div className="flex items-center gap-2 mt-4 pt-4 border-t border-slate-100">
+            <div className="flex flex-wrap items-center gap-2 mt-4 pt-4 border-t border-slate-100">
               <p className="text-[11px] text-slate-400 uppercase tracking-widest font-semibold mr-auto">Revisión</p>
               {canApprove && (
                 <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => setReviewAction("APPROVE")}>
@@ -544,12 +544,12 @@ export default function PaymentDetailPage() {
         className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden"
         style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
       >
-        <div className="px-6 py-4 border-b border-slate-100">
+        <div className="px-4 sm:px-6 py-4 border-b border-slate-100">
           <p className="text-[14px] font-semibold text-[#0B1426]">Línea de tiempo</p>
           <p className="text-[12px] text-slate-400 mt-0.5">{events.length} evento{events.length !== 1 ? "s" : ""} registrado{events.length !== 1 ? "s" : ""}</p>
         </div>
 
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {events.length === 0 ? (
             <p className="text-[13px] text-slate-400 text-center py-4">Sin eventos registrados</p>
           ) : (

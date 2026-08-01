@@ -105,12 +105,12 @@ export function PagosView({ initialPayments }: PagosViewProps) {
     <div className="space-y-5">
 
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-[22px] font-bold text-[#0B1426] tracking-tight">Seguimiento de pagos</h1>
           <p className="text-sm text-slate-400 mt-0.5">Comprobantes vía WhatsApp y pagos registrados a mano</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button variant="outline" size="sm" className="gap-2 text-slate-600 border-slate-200">
             <Download className="w-4 h-4" /> Exportar
           </Button>
@@ -129,40 +129,40 @@ export function PagosView({ initialPayments }: PagosViewProps) {
         style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
       >
         <div className="grid grid-cols-2 sm:grid-cols-4">
-          <div className="px-6 py-5 border-r border-b sm:border-b-0 border-slate-100">
+          <div className="px-4 sm:px-6 py-4 sm:py-5 border-r border-b sm:border-b-0 border-slate-100">
             <div className="flex items-center justify-between mb-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Total cobrado</p>
-              <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center">
+              <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
                 <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
               </div>
             </div>
-            <p className="text-[22px] font-bold text-[#0B1426] leading-none tabular-nums">{formatCurrency(totalAmount)}</p>
+            <p className="text-[20px] sm:text-[22px] font-bold text-[#0B1426] leading-none tabular-nums">{formatCurrency(totalAmount)}</p>
             <p className="text-[12px] text-slate-400 mt-1.5">{cobradoCount} verificado{cobradoCount !== 1 ? "s" : ""}</p>
           </div>
-          <div className="px-6 py-5 border-b sm:border-b-0 sm:border-r border-slate-100">
+          <div className="px-4 sm:px-6 py-4 sm:py-5 border-b sm:border-b-0 sm:border-r border-slate-100">
             <div className="flex items-center justify-between mb-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Cobrados</p>
-              <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center">
+              <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
               </div>
             </div>
             <p className="text-[28px] font-bold text-emerald-600 leading-none">{cobradoCount}</p>
             <p className="text-[12px] text-slate-400 mt-1.5">pagos verificados</p>
           </div>
-          <div className="px-6 py-5 border-r border-slate-100">
+          <div className="px-4 sm:px-6 py-4 sm:py-5 border-r border-slate-100">
             <div className="flex items-center justify-between mb-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Pendientes</p>
-              <div className="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center">
+              <div className="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center shrink-0">
                 <Clock className="w-3.5 h-3.5 text-amber-600" />
               </div>
             </div>
             <p className="text-[28px] font-bold text-amber-500 leading-none">{pendienteCount}</p>
             <p className="text-[12px] text-slate-400 mt-1.5">en proceso</p>
           </div>
-          <div className="px-6 py-5">
+          <div className="px-4 sm:px-6 py-4 sm:py-5">
             <div className="flex items-center justify-between mb-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Revisión</p>
-              <div className="w-7 h-7 rounded-lg bg-red-50 flex items-center justify-center">
+              <div className="w-7 h-7 rounded-lg bg-red-50 flex items-center justify-center shrink-0">
                 <XCircle className="w-3.5 h-3.5 text-red-500" />
               </div>
             </div>

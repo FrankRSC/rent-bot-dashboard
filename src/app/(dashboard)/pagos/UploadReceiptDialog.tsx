@@ -143,110 +143,114 @@ export function UploadReceiptDialog({ open, onClose }: { open: boolean; onClose:
       <DialogContent className="max-w-sm">
         <DialogHeader><DialogTitle>Subir comprobante</DialogTitle></DialogHeader>
 
-        {/* ── Éxito: VERIFIED / INTRABANK_OK ── */}
-        {isSuccess && result && (result.status === "VERIFIED" || result.status === "INTRABANK_OK") && (
-          <div className="py-2 space-y-3">
-            <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3 space-y-1.5">
-              <p className="flex items-center gap-2 text-[14px] font-semibold text-emerald-700">
-                <CheckCircle2 className="w-4 h-4" /> Comprobante verificado
-              </p>
-              {result.data.monto != null && (
-                <p className="text-[13px] text-emerald-700">
-                  Monto detectado: <span className="font-semibold">{formatCurrency(Number(result.data.monto))}</span>
-                </p>
-              )}
-              <BalanceLine balance={result.balance} />
-            </div>
-          </div>
-        )}
+        <div className="overflow-y-auto flex-1 min-h-0 px-4 pb-2">
 
-        {/* ── INCOMPLETE: pedir solo los campos faltantes ── */}
-        {result?.status === "INCOMPLETE" && (
-          <div className="py-2 space-y-4">
-            <p className="text-[13px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-              El comprobante quedó pendiente: faltan datos para validarlo. Completa los campos y reenvía (no hace falta volver a subir el archivo).
-            </p>
-            {result.missingFields.map((f) => (
-              <div key={f} className="space-y-1.5">
-                <label className="text-[13px] font-medium">{fieldLabel(f)}</label>
+          {/* ── Éxito: VERIFIED / INTRABANK_OK ── */}
+          {isSuccess && result && (result.status === "VERIFIED" || result.status === "INTRABANK_OK") && (
+            <div className="py-2 space-y-3">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3 space-y-1.5">
+                <p className="flex items-center gap-2 text-[14px] font-semibold text-emerald-700">
+                  <CheckCircle2 className="w-4 h-4" /> Comprobante verificado
+                </p>
+                {result.data.monto != null && (
+                  <p className="text-[13px] text-emerald-700">
+                    Monto detectado: <span className="font-semibold">{formatCurrency(Number(result.data.monto))}</span>
+                  </p>
+                )}
+                <BalanceLine balance={result.balance} />
+              </div>
+            </div>
+          )}
+
+          {/* ── INCOMPLETE: pedir solo los campos faltantes ── */}
+          {result?.status === "INCOMPLETE" && (
+            <div className="py-2 space-y-4">
+              <p className="text-[13px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                El comprobante quedó pendiente: faltan datos para validarlo. Completa los campos y reenvía (no hace falta volver a subir el archivo).
+              </p>
+              {result.missingFields.map((f) => (
+                <div key={f} className="space-y-1.5">
+                  <label className="text-[13px] font-medium">{fieldLabel(f)}</label>
+                  <Input
+                    type={f === "monto" ? "number" : f === "fecha" ? "date" : f === "billingPeriod" ? "month" : "text"}
+                    value={missingValues[f] ?? ""}
+                    onChange={(e) => setMissingValues((prev) => ({ ...prev, [f]: e.target.value }))}
+                  />
+                </div>
+              ))}
+              {error && (
+                <p className="text-[12px] text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
+              )}
+            </div>
+          )}
+
+          {/* ── Rechazo / error técnico ── */}
+          {isRejection && result && "message" in result && (
+            <div className="py-2 space-y-3">
+              <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 space-y-1.5">
+                <p className="flex items-center gap-2 text-[14px] font-semibold text-red-600">
+                  {result.status === "ERROR" ? <AlertCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                  {result.status === "ERROR" ? "No se pudo validar el comprobante" : "Comprobante rechazado"}
+                </p>
+                <p className="text-[13px] text-red-600">{result.message}</p>
+              </div>
+            </div>
+          )}
+
+          {/* ── Formulario inicial ── */}
+          {!result && (
+            <div className="space-y-4 py-2">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Inquilino</label>
+                <Select value={tenantId} onValueChange={(v) => setTenantId(v ?? "")}>
+                  <SelectTrigger><SelectValue placeholder="Seleccionar inquilino" /></SelectTrigger>
+                  <SelectContent>
+                    {allTenants.map((t) => (
+                      <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Comprobante (imagen o PDF)</label>
                 <Input
-                  type={f === "monto" ? "number" : f === "fecha" ? "date" : f === "billingPeriod" ? "month" : "text"}
-                  value={missingValues[f] ?? ""}
-                  onChange={(e) => setMissingValues((prev) => ({ ...prev, [f]: e.target.value }))}
+                  type="file"
+                  accept="image/*,.pdf"
+                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                 />
               </div>
-            ))}
-            {error && (
-              <p className="text-[12px] text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
-            )}
-          </div>
-        )}
 
-        {/* ── Rechazo / error técnico ── */}
-        {isRejection && result && "message" in result && (
-          <div className="py-2 space-y-3">
-            <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 space-y-1.5">
-              <p className="flex items-center gap-2 text-[14px] font-semibold text-red-600">
-                {result.status === "ERROR" ? <AlertCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
-                {result.status === "ERROR" ? "No se pudo validar el comprobante" : "Comprobante rechazado"}
-              </p>
-              <p className="text-[13px] text-red-600">{result.message}</p>
-            </div>
-          </div>
-        )}
+              {/* Sección colapsable de overrides del OCR */}
+              <div className="border border-slate-200 rounded-lg overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setShowOverrides((s) => !s)}
+                  className="w-full flex items-center justify-between px-3 py-2 text-[13px] font-medium text-slate-600 bg-slate-50 hover:bg-slate-100 transition-colors"
+                >
+                  Datos del comprobante (opcional)
+                  <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform", showOverrides && "rotate-180")} />
+                </button>
+                {showOverrides && (
+                  <div className="p-3 space-y-3">
+                    <p className="text-[12px] text-slate-400">
+                      Si los capturas, estos datos sobreescriben lo que detecte el OCR.
+                    </p>
+                    {overrideInput("claveRastreo", { placeholder: "Ej. MBAN01002505..." })}
+                    {overrideInput("monto", { type: "number", min: "0", step: "0.01", placeholder: "0.00" })}
+                    {overrideInput("bancoEmisor", { placeholder: "Ej. BBVA" })}
+                    {overrideInput("fecha", { type: "date" })}
+                    {overrideInput("billingPeriod", { type: "month" })}
+                  </div>
+                )}
+              </div>
 
-        {/* ── Formulario inicial ── */}
-        {!result && (
-          <div className="space-y-4 py-2">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">Inquilino</label>
-              <Select value={tenantId} onValueChange={(v) => setTenantId(v ?? "")}>
-                <SelectTrigger><SelectValue placeholder="Seleccionar inquilino" /></SelectTrigger>
-                <SelectContent>
-                  {allTenants.map((t) => (
-                    <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">Comprobante (imagen o PDF)</label>
-              <Input
-                type="file"
-                accept="image/*,.pdf"
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              />
-            </div>
-
-            {/* Sección colapsable de overrides del OCR */}
-            <div className="border border-slate-200 rounded-lg overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setShowOverrides((s) => !s)}
-                className="w-full flex items-center justify-between px-3 py-2 text-[13px] font-medium text-slate-600 bg-slate-50 hover:bg-slate-100 transition-colors"
-              >
-                Datos del comprobante (opcional)
-                <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform", showOverrides && "rotate-180")} />
-              </button>
-              {showOverrides && (
-                <div className="p-3 space-y-3">
-                  <p className="text-[12px] text-slate-400">
-                    Si los capturas, estos datos sobreescriben lo que detecte el OCR.
-                  </p>
-                  {overrideInput("claveRastreo", { placeholder: "Ej. MBAN01002505..." })}
-                  {overrideInput("monto", { type: "number", min: "0", step: "0.01", placeholder: "0.00" })}
-                  {overrideInput("bancoEmisor", { placeholder: "Ej. BBVA" })}
-                  {overrideInput("fecha", { type: "date" })}
-                  {overrideInput("billingPeriod", { type: "month" })}
-                </div>
+              {error && (
+                <p className="text-[12px] text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
               )}
             </div>
+          )}
 
-            {error && (
-              <p className="text-[12px] text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
-            )}
-          </div>
-        )}
+        </div>
 
         <DialogFooter>
           {isSuccess && (
