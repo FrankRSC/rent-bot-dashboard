@@ -12,6 +12,7 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const registered = searchParams.get("registered") === "1";
+  const reset = searchParams.get("reset") === "1";
   const login = useStore((s) => s.login);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -58,6 +59,11 @@ function LoginForm() {
           Cuenta creada exitosamente. Ya puedes iniciar sesión.
         </p>
       )}
+      {reset && (
+        <p className="mb-4 text-[13px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+          Contraseña actualizada. Inicia sesión con tu nueva contraseña.
+        </p>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-1.5">
@@ -72,7 +78,16 @@ function LoginForm() {
           />
         </div>
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-[#0B1426]">Contraseña</label>
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-[#0B1426]">Contraseña</label>
+            <Link
+              href="/recuperar-contrasena"
+              className="text-[12px] text-[#2952F3] hover:underline"
+              tabIndex={-1}
+            >
+              ¿Olvidaste tu contraseña?
+            </Link>
+          </div>
           <div className="relative">
             <Input
               type={showPassword ? "text" : "password"}

@@ -53,6 +53,22 @@ export const login = (email: string, password: string) =>
 
 export const logout = () => request<void>(`/auth/logout`, { method: "POST" });
 
+// POST /auth/forgot-password — envía correo con enlace de recuperación.
+// Siempre responde 200 para no revelar si el email existe (gap G10).
+export const forgotPassword = (email: string) =>
+  request<void>("/auth/forgot-password", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+
+// POST /auth/reset-password — establece nueva contraseña con el token del correo.
+// 400/404 si el token es inválido o expiró.
+export const resetPassword = (token: string, password: string) =>
+  request<void>("/auth/reset-password", {
+    method: "POST",
+    body: JSON.stringify({ token, password }),
+  });
+
 export const getMe = () => request<Landlord>(`/me`);
 
 // ── Health ────────────────────────────────────────────────────────────────────
