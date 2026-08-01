@@ -332,7 +332,7 @@ export const registerLandlord = (data: {
   email: string;
   phone: string;
   password: string;
-}) => request<{ landlord: { id: number; name: string; email: string } }>("/landlords", {
+}) => request<Landlord>("/landlords", {
   method: "POST",
   body: JSON.stringify(data),
 });
