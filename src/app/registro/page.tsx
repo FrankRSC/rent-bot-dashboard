@@ -101,9 +101,11 @@ export default function RegisterPage() {
             <Input
               type="tel"
               autoComplete="tel"
-              placeholder="55 1234 5678"
+              placeholder="5512345678"
+              inputMode="tel"
+              maxLength={13}
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 13))}
               required
             />
           </div>

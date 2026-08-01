@@ -301,7 +301,7 @@ export default function ConfiguracionPage() {
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[13px] font-medium text-slate-700">Teléfono (52XXXXXXXXXX)</label>
-                  <Input value={profileForm.phone} onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })} />
+                  <Input inputMode="tel" maxLength={13} value={profileForm.phone} onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value.replace(/\D/g, "").slice(0, 13) })} />
                 </div>
               </div>
               <div className="pt-4 border-t border-slate-100">

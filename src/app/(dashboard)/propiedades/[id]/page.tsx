@@ -129,7 +129,7 @@ function AddTenantDialog({ open, propertyId, onClose }: { open: boolean; propert
           </div>
           <div className="space-y-1.5">
             <label className="text-sm font-medium">Teléfono WhatsApp (52XXXXXXXXXX)</label>
-            <Input placeholder="5215512345678" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+            <Input placeholder="5215512345678" inputMode="tel" maxLength={13} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, "").slice(0, 13) })} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
@@ -231,7 +231,7 @@ function EditTenantDialog({ tenant, onClose }: { tenant: TenantWithStatus; onClo
           </div>
           <div className="space-y-1.5">
             <label className="text-sm font-medium">Teléfono WhatsApp (52XXXXXXXXXX)</label>
-            <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+            <Input inputMode="tel" maxLength={13} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, "").slice(0, 13) })} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
