@@ -10,21 +10,22 @@ import * as api from "@/lib/api";
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [form, setForm] = useState({ name: "", email: "", phone: "", password: "", confirm: "" });
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  const set = (field: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm((f) => ({ ...f, [field]: e.target.value }));
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (form.password !== form.confirm) {
+    if (password !== confirm) {
       setError("Las contraseñas no coinciden.");
       return;
     }
-    if (form.password.length < 8) {
+    if (password.length < 8) {
       setError("La contraseña debe tener al menos 8 caracteres.");
       return;
     }
@@ -32,10 +33,10 @@ export default function RegisterPage() {
     setError(null);
     try {
       await api.registerLandlord({
-        name: form.name.trim(),
-        email: form.email.trim(),
-        phone: form.phone.trim(),
-        password: form.password,
+        name: name.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
+        password,
       });
       router.push("/login?registered=1");
     } catch (err) {
@@ -52,7 +53,7 @@ export default function RegisterPage() {
     }
   };
 
-  const canSubmit = form.name && form.email && form.phone && form.password && form.confirm;
+  const canSubmit = name && email && phone && password && confirm;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#F4F5F7] px-4">
@@ -77,8 +78,8 @@ export default function RegisterPage() {
               type="text"
               autoComplete="name"
               placeholder="Juan Pérez"
-              value={form.name}
-              onChange={set("name")}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
               required
             />
           </div>
@@ -89,8 +90,8 @@ export default function RegisterPage() {
               type="email"
               autoComplete="email"
               placeholder="tucorreo@ejemplo.com"
-              value={form.email}
-              onChange={set("email")}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               required
             />
           </div>
@@ -101,8 +102,8 @@ export default function RegisterPage() {
               type="tel"
               autoComplete="tel"
               placeholder="55 1234 5678"
-              value={form.phone}
-              onChange={set("phone")}
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
               required
             />
           </div>
@@ -114,8 +115,8 @@ export default function RegisterPage() {
                 type={showPassword ? "text" : "password"}
                 autoComplete="new-password"
                 placeholder="Mínimo 8 caracteres"
-                value={form.password}
-                onChange={set("password")}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 className="pr-9"
                 required
               />
@@ -137,8 +138,8 @@ export default function RegisterPage() {
               type={showPassword ? "text" : "password"}
               autoComplete="new-password"
               placeholder="Repite tu contraseña"
-              value={form.confirm}
-              onChange={set("confirm")}
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
               required
             />
           </div>

@@ -275,6 +275,8 @@ export async function mockBackend(
   let nextPropertyId = Math.max(0, ...data.properties.map((p) => p.id)) + 1;
   let nextTenantId = Math.max(0, ...data.tenants.map((t) => t.id)) + 1;
   let nextFacturaSeq = data.facturas.length + 1;
+  let nextLandlordId = data.landlord.id + 1;
+  const registeredEmails = new Set<string>([data.landlord.email]);
 
   const handler = async (route: Route) => {
     const request = route.request();
@@ -290,6 +292,9 @@ export async function mockBackend(
         body: JSON.stringify(body ?? null),
       });
     const empty = () => route.fulfill({ status: 204, headers: CORS_HEADERS });
+
+    // Las navegaciones de página las sirve Next.js, no el mock.
+    if (request.resourceType() === "document") return route.continue();
 
     if (method === "OPTIONS") return empty();
 
@@ -323,6 +328,29 @@ export async function mockBackend(
     }
     if (method === "GET" && path === "/me") {
       return authed ? json(data.landlord) : json({ statusCode: 401, message: "Unauthorized" }, 401);
+    }
+
+    // ── Register (autoregistro público) ──
+    if (method === "POST" && path === "/landlords") {
+      const body = request.postDataJSON() as { name: string; email: string; phone: string; password: string };
+      if (registeredEmails.has(body.email)) {
+        return json({ statusCode: 409, message: "Email already exists" }, 409);
+      }
+      const newLandlord: Landlord = {
+        id: nextLandlordId++,
+        name: body.name,
+        email: body.email,
+        phone: body.phone,
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        facturasEnabled: false,
+        autoRemindersEnabled: true,
+        defaultReminderDays: 3,
+        notifyOnPayment: true,
+        notifyOnOverdue: true,
+      };
+      registeredEmails.add(body.email);
+      return json(newLandlord, 201);
     }
 
     // ── Landlord ──
