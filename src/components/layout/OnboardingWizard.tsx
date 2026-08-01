@@ -63,10 +63,10 @@ function WelcomeStep({ onNext }: { onNext: () => void }) {
 
       <div className="space-y-3 mb-8">
         {[
-          { icon: MessageCircle, color: "bg-blue-50 text-blue-600",     title: "Cobros desde WhatsApp",      desc: "Tu inquilino manda foto del comprobante y aparece aquí al instante, sin que hagas nada" },
-          { icon: ShieldCheck,   color: "bg-emerald-50 text-emerald-600", title: "Sabes quién pagó de verdad", desc: "Cada pago se confirma automáticamente, sin que tengas que revisar tu cuenta bancaria" },
-          { icon: Bell,          color: "bg-amber-50 text-amber-600",  title: "Sin perseguir a nadie",      desc: "El sistema avisa a quien no ha pagado antes y después del vencimiento, solo" },
-          { icon: BarChart2,     color: "bg-purple-50 text-purple-600", title: "Todo en un lugar",           desc: "Ve cuánto cobró cada mes, quién debe y quién ya pagó, desde tu cel o computadora" },
+          { icon: MessageCircle, color: "bg-blue-50 text-blue-600",       title: "Pagos por WhatsApp",          desc: "Tus inquilinos envían su comprobante y queda registrado automáticamente" },
+          { icon: ShieldCheck,   color: "bg-emerald-50 text-emerald-600", title: "Verificación de pagos",       desc: "Confirma si un pago llegó a tu cuenta sin tener que revisar el banco" },
+          { icon: Bell,          color: "bg-amber-50 text-amber-600",   title: "Recordatorios automáticos",   desc: "Notifica a tus inquilinos antes y después de su fecha de pago sin intervención manual" },
+          { icon: BarChart2,     color: "bg-purple-50 text-purple-600", title: "Resumen mensual",             desc: "Consulta el estado de cobro de todas tus propiedades en un solo lugar" },
         ].map(({ icon: Icon, color, title, desc }) => (
           <div key={title} className="flex items-start gap-3.5 bg-slate-50 rounded-2xl p-4">
             <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center shrink-0", color)}>
