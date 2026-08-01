@@ -417,7 +417,8 @@ ExtractionFields {
   ocrCuentaDestino?: string | null;
 }
 
-DatasetCaseSource = "complete"   // arrendador llenó campos que faltaron
+DatasetCaseSource = "complete"   // se completaron campos que OCR/IA no leyó
+                                  // (inquilino vía WhatsApp o arrendador en modo manual)
                   | "review"    // arrendador corrigió el monto al aprobar
 ```
 
