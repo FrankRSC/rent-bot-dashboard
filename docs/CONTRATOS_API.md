@@ -50,7 +50,7 @@ Base path efectiva en el backend (sin el prefijo `/api` del rewrite).
 | `updateLandlord(id, data)` | PATCH | `/landlords/:id` | `Partial<{name,email,phone,password,ownerBank,beneficiaryAccount,beneficiaryAccountType,facturasEnabled,autoRemindersEnabled,defaultReminderDays,notifyOnPayment,notifyOnOverdue}>` | `Landlord` |
 | `updateLandlordFiscal(id, data)` | PATCH | `/landlords/:id/fiscal` | `{rfc, taxRegime, zipCode, fiscalName?}` | `Landlord` |
 | `getLandlords()` | GET | `/landlords` | — | `Landlord[]` — **solo admin** (`AdminOnlyGuard`); `403` para landlords normales |
-| *(sin fn aún)* | POST | `/landlords` | `{name, email, phone, ...}` — `409` si el email ya existe | `Landlord` |
+| `registerLandlord(data)` | POST | `/landlords` | `{name, email, phone, password}` — **público, sin auth**. `409` si email ya existe. `400` si falta campo o password < 8 chars (`ValidationPipe whitelist+forbid`). | `Landlord` |
 | *(sin fn aún)* | DELETE | `/landlords/:id` | — | `204 / void` |
 
 > `PATCH /landlords/:id/fiscal` lo sirve el **módulo de facturación** (`FacturasController`, con DTO validado por whitelist); la ruta y el contrato no cambian para el cliente.
