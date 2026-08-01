@@ -1,14 +1,17 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Building2, Eye, EyeOff } from "lucide-react";
 import { useStore } from "@/store/useStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const registered = searchParams.get("registered") === "1";
   const login = useStore((s) => s.login);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -36,72 +39,93 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#F4F5F7] px-4">
-      <div
-        className="w-full max-w-sm bg-white rounded-2xl border border-slate-200/80 p-8"
-        style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
-      >
-        <div className="flex flex-col items-center gap-3 mb-7">
-          <div className="w-11 h-11 rounded-2xl bg-[#eef1fd] flex items-center justify-center">
-            <Building2 className="w-5 h-5 text-[#2952F3]" />
-          </div>
-          <div className="text-center">
-            <h1 className="text-[20px] font-bold text-[#0B1426] tracking-tight">Iniciar sesión</h1>
-            <p className="text-[13px] text-slate-400 mt-0.5">Panel de cobranza de rentas</p>
+    <div
+      className="w-full max-w-sm bg-white rounded-2xl border border-slate-200/80 p-8"
+      style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
+    >
+      <div className="flex flex-col items-center gap-3 mb-7">
+        <div className="w-11 h-11 rounded-2xl bg-[#eef1fd] flex items-center justify-center">
+          <Building2 className="w-5 h-5 text-[#2952F3]" />
+        </div>
+        <div className="text-center">
+          <h1 className="text-[20px] font-bold text-[#0B1426] tracking-tight">Iniciar sesión</h1>
+          <p className="text-[13px] text-slate-400 mt-0.5">Panel de cobranza de rentas</p>
+        </div>
+      </div>
+
+      {registered && (
+        <p className="mb-4 text-[13px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+          Cuenta creada exitosamente. Ya puedes iniciar sesión.
+        </p>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-[#0B1426]">Correo</label>
+          <Input
+            type="email"
+            autoComplete="email"
+            placeholder="tucorreo@ejemplo.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-[#0B1426]">Contraseña</label>
+          <div className="relative">
+            <Input
+              type={showPassword ? "text" : "password"}
+              autoComplete="current-password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="pr-9"
+              required
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              tabIndex={-1}
+              aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+            >
+              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-[#0B1426]">Correo</label>
-            <Input
-              type="email"
-              autoComplete="email"
-              placeholder="tucorreo@ejemplo.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-[#0B1426]">Contraseña</label>
-            <div className="relative">
-              <Input
-                type={showPassword ? "text" : "password"}
-                autoComplete="current-password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="pr-9"
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                tabIndex={-1}
-                aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
-              >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
+        {error && (
+          <p className="text-[13px] text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            {error}
+          </p>
+        )}
 
-          {error && (
-            <p className="text-[13px] text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-              {error}
-            </p>
-          )}
+        <Button
+          type="submit"
+          disabled={loading || !email || !password}
+          className="w-full bg-[#2952F3] hover:bg-[#1e3fd4]"
+        >
+          {loading ? "Entrando..." : "Entrar"}
+        </Button>
+      </form>
 
-          <Button
-            type="submit"
-            disabled={loading || !email || !password}
-            className="w-full bg-[#2952F3] hover:bg-[#1e3fd4]"
-          >
-            {loading ? "Entrando..." : "Entrar"}
-          </Button>
-        </form>
-      </div>
+      <p className="mt-5 text-center text-[13px] text-slate-400">
+        ¿No tienes cuenta?{" "}
+        <Link href="/registro" className="text-[#2952F3] hover:underline font-medium">
+          Regístrate
+        </Link>
+      </p>
+    </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-[#F4F5F7] px-4">
+      <Suspense fallback={null}>
+        <LoginForm />
+      </Suspense>
     </div>
   );
 }

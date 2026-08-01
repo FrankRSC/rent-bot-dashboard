@@ -325,6 +325,18 @@ export const updateTenantFiscal = (
     body: JSON.stringify(data),
   });
 
+// ── Register (autoservicio público) ──────────────────────────────────────────
+
+export const registerLandlord = (data: {
+  name: string;
+  email: string;
+  phone: string;
+  password: string;
+}) => request<{ landlord: { id: number; name: string; email: string } }>("/landlords", {
+  method: "POST",
+  body: JSON.stringify(data),
+});
+
 // ── Admin (solo super-admin, gateado por ADMIN_EMAILS en el backend) ──────────
 
 export const getBusinessMetrics = () =>
