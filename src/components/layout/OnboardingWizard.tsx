@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import {
   Building2, Users, CheckCircle2, ChevronRight, X, Loader2,
@@ -282,10 +282,16 @@ export function OnboardingWizard() {
     fetchProperties, fetchAllTenants,
   } = useStore();
 
-  const [dismissed, setDismissed] = useState<boolean>(() => {
-    if (typeof window === "undefined") return true;
-    return !!localStorage.getItem(STORAGE_KEY);
-  });
+  // useSyncExternalStore garantiza que servidor y cliente arranquen con el mismo
+  // valor (true = dismissed), evitando el hydration mismatch de typeof window.
+  const storeDismissed = useSyncExternalStore(
+    () => () => {},
+    () => !!localStorage.getItem(STORAGE_KEY),
+    () => true,
+  );
+  const [localDismissed, setLocalDismissed] = useState(false);
+  const dismissed = storeDismissed || localDismissed;
+
   const [step, setStep] = useState<WizardStep>("welcome");
   const [createdPropertyId, setCreatedPropertyId] = useState<number | null>(null);
   const [createdPropertyName, setCreatedPropertyName] = useState("");
@@ -310,7 +316,7 @@ export function OnboardingWizard() {
 
   const dismiss = (completed = false) => {
     localStorage.setItem(STORAGE_KEY, completed ? "completed" : "skipped");
-    setDismissed(true);
+    setLocalDismissed(true);
   };
 
   const handleCreateProperty = async () => {
