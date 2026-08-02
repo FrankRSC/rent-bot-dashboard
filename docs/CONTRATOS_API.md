@@ -112,7 +112,7 @@ Base path efectiva en el backend (sin el prefijo `/api` del rewrite).
 
 **`Tenant`** (`types.ts:50`): incluye `phone` en formato `52XXXXXXXXXX`, y campos opcionales de cuenta/renta/fiscales. **NUEVO — normalización de teléfonos (backend):** todo `phone` que entre por `createTenant`/`updateTenant` (y por `POST/PATCH /landlords`) se normaliza antes de guardar: se descartan no-dígitos; 10 dígitos → se antepone `52`; `521XXXXXXXXXX` (formato viejo de Meta) → `52XXXXXXXXXX`. El UI puede mandar los 10 dígitos tal cual los captura; el backend siempre guarda y devuelve `52XXXXXXXXXX`. Las filas existentes ya fueron migradas a este formato. `paymentStatus` y `lastPaymentDate` sólo vienen poblados desde `getAllTenants`. **NUEVO:** `lastReminderAt: string | null` (ISO, `null` si nunca) — viene en **todas** las respuestas de tenant, incluida `GET /landlords/:id/tenants` (cierra G5: el estado de recordatorio ya es del servidor).
 
-**`paymentStatus`** (solo desde `getAllTenants`) — estado del mes en curso: `"Pagado"` (los abonos del mes cubren `monthlyAmount`; **sin tolerancia** — cubre si `paid >= monthlyAmount`), `"Parcial"` (hay abonos pero no cubren la renta, i.e. `paid < monthlyAmount`), `"Revisión"` (hay intentos rechazados/erróneos este mes), `"Vencido"` (sin pago este mes pero pagó en meses previos), `"Pendiente"` (sin actividad). Cuenta `VERIFIED`, `INTRABANK_OK`, `MANUAL_VERIFIED` y `PARTIAL`. Para el desglose exacto esperado/pagado/restante usa `PeriodBalance` (`GET /payments/manual/balance/:tenantId`).
+**`paymentStatus`** (solo desde `getAllTenants`) — estado del mes en curso: `"Pagado"` (los abonos del mes cubren `monthlyAmount`; **sin tolerancia** — cubre si `paid >= monthlyAmount`), `"Parcial"` (hay abonos pero no cubren la renta, i.e. `paid < monthlyAmount`), `"Revisión"` (hay intentos rechazados/erróneos/en revisión este mes — status `REJECTED`, `ERROR`, `ABANDONED` o `REVIEW`), `"Vencido"` (sin pago este mes pero pagó en meses previos), `"Pendiente"` (sin actividad). Cuenta `VERIFIED`, `MANUAL_VERIFIED` y `PARTIAL` como pagado. Para el desglose exacto esperado/pagado/restante usa `PeriodBalance` (`GET /payments/manual/balance/:tenantId`).
 
 > ✅ **`"Parcial"` implementado y activo (2026-07-25: no está "pendiente de deploy", es parte del código igual que el resto del backend — no hay entorno compartido persistente, cada lado lo corre localmente para probar).** `getAllTenants` ya compara los abonos del mes contra `monthlyAmount` y devuelve `"Parcial"` cuando `paid < monthlyAmount` (`landlords.service.ts:163-166`, usa el mismo `AMOUNT_TOLERANCE` compartido). **Cambio de regla (2026-07-22):** se eliminó la tolerancia de $1 — ahora **cualquier pago menor al 100% de la renta es parcial** (ej. renta 100, pago 99 → `"Parcial"`, faltante 1). Mismo criterio en el bot de WhatsApp y en el modo manual (`AMOUNT_TOLERANCE = 0`). El frontend ya lo tipa en `PaymentStatus`. Para el desglose exacto usa `GET /payments/manual/balance/:tenantId?period=YYYY-MM` (§2.7).
 
@@ -162,8 +162,12 @@ Desde el **modo manual** (§2.7) el backend añadió también:
 
 El resto de eventos llevan solo primitivos (`reason`, `status`, `error`, `size`, `mediaId`, `messageId`).
 
-`AttemptStatus` = `PENDING | VERIFIED | REJECTED | INTRABANK_OK | INTRABANK_REJECTED | ERROR | ABANDONED | MANUAL_VERIFIED | PARTIAL`.
+`AttemptStatus` = `PENDING | VERIFIED | REJECTED | ERROR | REVIEW | ABANDONED | MANUAL_VERIFIED | PARTIAL`.
 
+- **`INTRABANK_OK`/`INTRABANK_REJECTED` eliminados (2026-08-02)** — unificados con `VERIFIED`/`REJECTED`. El status ya no distingue intra vs. interbancario (ese dato sigue disponible en `ocrData.isIntrabancario` si se necesita); antes eran dos nombres para el mismo concepto de "pago confirmado"/"pago rechazado".
+- `VERIFIED` — pago confirmado, sea interbancario (Banxico/CEP) o intrabancario (cuenta destino cotejada contra la registrada).
+- `REJECTED` — pago rechazado, mismo criterio (Banxico dijo que no, o la cuenta destino no coincide).
+- `REVIEW` — no se pudo verificar automático (nuevo, 2026-08-01) — pasa a revisión manual del arrendador; notificado por WhatsApp (template `pagos_por_revisar_plataforma`, pendiente de aprobación en Meta).
 - `MANUAL_VERIFIED` — el arrendador lo registró/aprobó a mano (cuenta como **Pagado** en reportes).
 - `PARTIAL` — abono que aún no cubre la renta del periodo (suma en el saldo de §2.7 pero no marca el mes como pagado).
 
@@ -240,16 +244,20 @@ El backend decide el estado: si `amount` + lo ya abonado cubre `tenant.monthlyAm
 - `tenantId` — **requerido**
 - Campos opcionales que **sobreescriben** lo que detecte el OCR: `claveRastreo`, `referencia`, `monto`, `bancoEmisor`, `bancoReceptor`, `cuentaDestino`, `fecha`, `billingPeriod`
 
-**`ReceiptValidationResult`** — discriminado por `status`:
+**`ReceiptValidationResult`** — discriminado por `status`. **Cambio (2026-08-02):** `INTRABANK_OK`/
+`INTRABANK_REJECTED` se eliminaron — ahora es `VERIFIED`/`REJECTED` para ambos casos (interbancario e
+intrabancario), pero **`validation` ya no está garantizado quede el status que quede** — solo viene cuando
+hubo verificación real contra Banxico (interbancario). Si fue intrabancario (cuenta destino cotejada contra
+la registrada, sin CEP), `validation` está ausente. `validation?` debe volverse opcional en el tipo del
+front:
 ```ts
 // Todos incluyen: { attemptId: number; data: OcrData }
-| { status: "VERIFIED"; validation; balance: PeriodBalance }      // Banxico dijo LIQUIDADO
-| { status: "INTRABANK_OK"; balance: PeriodBalance }              // mismo banco, cuenta cotejada vs la registrada
+| { status: "VERIFIED"; validation?; balance: PeriodBalance }     // validation presente = Banxico LIQUIDADO (interbancario)
+                                                                  // validation ausente = cuenta cotejada vs la registrada (intrabancario)
 | { status: "INCOMPLETE"; missingFields: string[] }               // faltan campos → usar /attempts/:id/complete
-| { status: "REJECTED"; message: string; validation }             // Banxico no lo encontró / no coincide; también
-                                                                  // "Este comprobante ya fue registrado en el intento #<id>"
-                                                                  // cuando se detecta un duplicado/reutilización
-| { status: "INTRABANK_REJECTED"; message: string }               // cuenta del comprobante ≠ registrada
+| { status: "REJECTED"; message: string; validation? }            // validation presente = Banxico no lo encontró/no coincide (interbancario)
+                                                                  // validation ausente = cuenta del comprobante ≠ registrada (intrabancario),
+                                                                  // o "Este comprobante ya fue registrado en el intento #<id>" (duplicado)
 | { status: "ERROR"; message: string }                            // fallo técnico (OCR ilegible, Banxico caído)
 ```
 Flujo `INCOMPLETE`: el intento queda `PENDING` con lo detectado guardado; el UI muestra un formulario con `missingFields`, y manda **solo esos campos** a `POST /payments/manual/attempts/:id/complete` (mismo `ReceiptValidationResult` de vuelta, sin re-subir el archivo).
@@ -259,7 +267,7 @@ Flujo `INCOMPLETE`: el intento queda `PENDING` con lo detectado guardado; el UI 
 { tenantId: number; tenantName: string;
   period: string;                          // YYYY-MM
   expected: number | null;                 // tenant.monthlyAmount (null si no está configurada)
-  paid: number;                            // suma de VERIFIED + INTRABANK_OK + MANUAL_VERIFIED + PARTIAL del periodo
+  paid: number;                            // suma de VERIFIED + MANUAL_VERIFIED + PARTIAL del periodo
   remaining: number | null;
   status: "PAGADO" | "PARCIAL" | "PENDIENTE" | "SIN_RENTA_CONFIGURADA";
   attempts: PaymentAttempt[] }             // los intentos que suman al periodo
@@ -371,7 +379,7 @@ Tabla en `/admin/inquilinos`: inquilino (nombre + día de pago), arrendador (bad
 OcrMethodStat {
   methodUsed: string;    // ej. "OCR_SPACE", "GEMINI_ONLY", "OCR_SPACE + GEMINI", "SIN_DATO"
   total: number;         // intentos que usaron este método
-  success: number;       // VERIFIED + INTRABANK_OK + MANUAL_VERIFIED
+  success: number;       // VERIFIED + MANUAL_VERIFIED
   successRate: number;   // 0–100, ya redondeado a 1 decimal
 }
 
