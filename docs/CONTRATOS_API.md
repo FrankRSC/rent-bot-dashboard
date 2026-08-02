@@ -116,15 +116,19 @@ un cambio **permanente** de renta:
   y el mensaje de "pago parcial" del bot. `reason`: texto libre, opcional (ej. "Gastos de la casa").
 - `POST` hace upsert (un solo ajuste por `tenantId`+`billingPeriod` — un segundo `POST` con el mismo periodo
   actualiza el monto en vez de duplicar).
-- `TenantPeriodAdjustment`: `{ id, tenantId, billingPeriod, expectedAmount, reason: string | null, createdAt }`.
+- `TenantPeriodAdjustment`: `{ id, tenantId, billingPeriod, expectedAmount, reason: string | null, createdAt, updatedAt }`.
+  `createdAt` es cuándo se creó por primera vez; `updatedAt` cambia cada vez que se edita (el `POST` hace
+  upsert — si el arrendador corrige un ajuste ya existente para el mismo periodo, `expectedAmount`/`reason`
+  se sobreescriben en la misma fila y solo `updatedAt` refleja que hubo un cambio, no queda el valor previo).
 - `GET /tenants/:id/period-adjustments` (plural) devuelve el **historial completo**, no solo el mes actual.
 - **Importante para que el arrendador pueda "llevar control" del ajuste (pedido explícito del humano):**
-  `getAllTenants` y `PeriodBalance` ya devuelven `periodAdjustment: {billingPeriod?, expectedAmount, reason}
-  | null` junto con `paymentStatus`/`expected` — si un tenant tiene `periodAdjustment != null`, el número
-  que se está usando como "renta esperada" ese mes **no** es `tenant.monthlyAmount`, es el del ajuste. Sin
-  mostrar esto en el UI, un arrendador vería p.ej. "Pagado" con un monto menor a `monthlyAmount` y no
-  entendería por qué — recomendamos un badge/tooltip en la fila del tenant cuando `periodAdjustment` no sea
-  `null` (con el `reason` si existe).
+  `getAllTenants` y `PeriodBalance` ya devuelven `periodAdjustment: {billingPeriod?, expectedAmount, reason,
+  createdAt, updatedAt} | null` junto con `paymentStatus`/`expected` — si un tenant tiene `periodAdjustment
+  != null`, el número que se está usando como "renta esperada" ese mes **no** es `tenant.monthlyAmount`, es
+  el del ajuste. Sin mostrar esto en el UI, un arrendador vería p.ej. "Pagado" con un monto menor a
+  `monthlyAmount` y no entendería por qué — recomendamos un badge/tooltip en la fila del tenant cuando
+  `periodAdjustment` no sea `null` (con el `reason` y, si `updatedAt != createdAt`, algo como "editado el
+  {updatedAt}").
 - No es ruta congelada de G6 (adición nueva, no toca las 3 familias existentes). **No hay UI todavía** —
   avisen si quieren el formulario para setear/quitar el ajuste desde el dashboard.
 
