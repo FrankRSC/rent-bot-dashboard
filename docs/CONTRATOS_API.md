@@ -103,6 +103,21 @@ Base path efectiva en el backend (sin el prefijo `/api` del rewrite).
 | `deleteTenant(id)` | DELETE | `/properties/tenants/:id` | — | `204 / void` |
 | `updateTenantFiscal(id, data)` | PATCH | `/tenants/:id/fiscal` | `{rfc?, taxRegime?, zipCode?}` | `Tenant` · `400` si RFC inválido o CP ≠ 5 dígitos |
 | `sendTenantReminder(id)` *(NUEVO — UI implementado ✅)* | POST | `/tenants/:id/reminder` | — (sin body) | `{ sentAt: string }` (ISO) |
+| `setPeriodAdjustment(id, data)` *(NUEVO — sin UI aún)* | POST | `/tenants/:id/period-adjustment` | `{billingPeriod, expectedAmount, reason?}` | `TenantPeriodAdjustment` |
+| `removePeriodAdjustment(id, billingPeriod)` *(NUEVO — sin UI aún)* | DELETE | `/tenants/:id/period-adjustment/:billingPeriod` | — | `204 / void` |
+
+**POST/DELETE `/tenants/:id/period-adjustment`** — ajuste puntual de la renta esperada para UN mes
+específico (ej. descuento por gastos de la casa este mes), **sin** cambiar `monthlyAmount` ni requerir
+revertir nada el mes siguiente — a diferencia de `nextMonthlyAmount`/`adjustmentDate` (§ más abajo), que es
+un cambio **permanente** de renta:
+- `billingPeriod`: `YYYY-MM`. `expectedAmount`: número positivo, reemplaza `monthlyAmount` **solo** para ese
+  periodo al calcular `paymentStatus` (`getAllTenants`), `PeriodBalance` (`GET /payments/manual/balance/:id`)
+  y el mensaje de "pago parcial" del bot. `reason`: texto libre, opcional (ej. "Gastos de la casa").
+- `POST` hace upsert (un solo ajuste por `tenantId`+`billingPeriod` — un segundo `POST` con el mismo periodo
+  actualiza el monto en vez de duplicar).
+- `TenantPeriodAdjustment`: `{ id, tenantId, billingPeriod, expectedAmount, reason: string | null, createdAt }`.
+- No es ruta congelada de G6 (adición nueva, no toca las 3 familias existentes). **No hay UI todavía** —
+  avisen si quieren el formulario para setear/quitar el ajuste desde el dashboard.
 
 **POST `/tenants/:id/reminder`** — recordatorio manual de renta por WhatsApp, disparado por el landlord desde el UI:
 - Envía la **plantilla Meta `renta_pendiente`** (nombre, periodo actual, monto efectivo de renta), por lo que entrega **aunque no haya ventana de sesión de 24 h** con el inquilino.
