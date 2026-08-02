@@ -97,7 +97,7 @@ Base path efectiva en el backend (sin el prefijo `/api` del rewrite).
 | Fn | Método | Ruta | Body | Respuesta |
 |---|---|---|---|---|
 | `getTenants(propertyId)` | GET | `/properties/:propertyId/tenants` | — | `Tenant[]` |
-| `getAllTenants(landlordId)` | GET | `/landlords/:landlordId/tenants` | — | `Tenant[]` (con `paymentStatus`, `lastPaymentDate`) |
+| `getAllTenants(landlordId)` | GET | `/landlords/:landlordId/tenants` | — | `Tenant[]` (con `paymentStatus`, `lastPaymentDate`, `periodAdjustment`) |
 | `createTenant(propertyId, data)` | POST | `/properties/:propertyId/tenants` | `{name, phone, destinationAccount?, destinationAccountType?, paymentDay?, monthlyAmount?, contractStartDate?, contractEndDate?, nextMonthlyAmount?, adjustmentDate?}` | `Tenant` |
 | `updateTenant(id, data)` | PATCH | `/properties/tenants/:id` | `Partial<>` del body de crear | `Tenant` |
 | `deleteTenant(id)` | DELETE | `/properties/tenants/:id` | — | `204 / void` |
@@ -105,8 +105,9 @@ Base path efectiva en el backend (sin el prefijo `/api` del rewrite).
 | `sendTenantReminder(id)` *(NUEVO — UI implementado ✅)* | POST | `/tenants/:id/reminder` | — (sin body) | `{ sentAt: string }` (ISO) |
 | `setPeriodAdjustment(id, data)` *(NUEVO — sin UI aún)* | POST | `/tenants/:id/period-adjustment` | `{billingPeriod, expectedAmount, reason?}` | `TenantPeriodAdjustment` |
 | `removePeriodAdjustment(id, billingPeriod)` *(NUEVO — sin UI aún)* | DELETE | `/tenants/:id/period-adjustment/:billingPeriod` | — | `204 / void` |
+| `getPeriodAdjustmentsHistory(id)` *(NUEVO — sin UI aún)* | GET | `/tenants/:id/period-adjustments` | — | `TenantPeriodAdjustment[]` (más reciente primero) |
 
-**POST/DELETE `/tenants/:id/period-adjustment`** — ajuste puntual de la renta esperada para UN mes
+**POST/DELETE/GET `/tenants/:id/period-adjustment(s)`** — ajuste puntual de la renta esperada para UN mes
 específico (ej. descuento por gastos de la casa este mes), **sin** cambiar `monthlyAmount` ni requerir
 revertir nada el mes siguiente — a diferencia de `nextMonthlyAmount`/`adjustmentDate` (§ más abajo), que es
 un cambio **permanente** de renta:
@@ -116,6 +117,14 @@ un cambio **permanente** de renta:
 - `POST` hace upsert (un solo ajuste por `tenantId`+`billingPeriod` — un segundo `POST` con el mismo periodo
   actualiza el monto en vez de duplicar).
 - `TenantPeriodAdjustment`: `{ id, tenantId, billingPeriod, expectedAmount, reason: string | null, createdAt }`.
+- `GET /tenants/:id/period-adjustments` (plural) devuelve el **historial completo**, no solo el mes actual.
+- **Importante para que el arrendador pueda "llevar control" del ajuste (pedido explícito del humano):**
+  `getAllTenants` y `PeriodBalance` ya devuelven `periodAdjustment: {billingPeriod?, expectedAmount, reason}
+  | null` junto con `paymentStatus`/`expected` — si un tenant tiene `periodAdjustment != null`, el número
+  que se está usando como "renta esperada" ese mes **no** es `tenant.monthlyAmount`, es el del ajuste. Sin
+  mostrar esto en el UI, un arrendador vería p.ej. "Pagado" con un monto menor a `monthlyAmount` y no
+  entendería por qué — recomendamos un badge/tooltip en la fila del tenant cuando `periodAdjustment` no sea
+  `null` (con el `reason` si existe).
 - No es ruta congelada de G6 (adición nueva, no toca las 3 familias existentes). **No hay UI todavía** —
   avisen si quieren el formulario para setear/quitar el ajuste desde el dashboard.
 
