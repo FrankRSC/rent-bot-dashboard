@@ -767,7 +767,7 @@ export interface components {
             paymentDay: number | null;
             monthlyAmount: number | null;
             /** @enum {string} */
-            paymentStatus: "Pagado" | "Pendiente" | "Vencido";
+            paymentStatus: "Pagado" | "Pendiente" | "Atrasado" | "Vencido";
             /** Format: date-time */
             lastVerifiedAt: string | null;
             amountPaid: number | null;

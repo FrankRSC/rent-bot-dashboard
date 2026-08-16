@@ -1,5 +1,5 @@
 export type AccountType = "CLABE" | "CARD" | "PHONE";
-export type PaymentStatus = "Pagado" | "Parcial" | "Pendiente" | "Vencido" | "Revisión";
+export type PaymentStatus = "Pagado" | "Parcial" | "Pendiente" | "Atrasado" | "Vencido" | "Revisión";
 
 export type AttemptStatus =
   | "PENDING"

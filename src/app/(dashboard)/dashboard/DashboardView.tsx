@@ -27,7 +27,7 @@ const monthlyData = [
 ];
 
 const STATUS_ORDER: Record<PaymentStatus, number> = {
-  Vencido: 0, Revisión: 1, Pendiente: 2, Parcial: 2, Pagado: 3,
+  Atrasado: 0, Vencido: 0, Revisión: 1, Pendiente: 2, Parcial: 2, Pagado: 3,
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -133,7 +133,7 @@ export function DashboardView({ initialTenants, initialPayments, initialProperti
 
   const cobradoCount  = tenantsWithStatus.filter((t) => t.paymentStatus === "Pagado").length;
   const pendienteCount = tenantsWithStatus.filter((t) => t.paymentStatus === "Pendiente").length;
-  const vencidoCount  = tenantsWithStatus.filter((t) => t.paymentStatus === "Vencido").length;
+  const atrasadoCount = tenantsWithStatus.filter((t) => t.paymentStatus === "Atrasado").length;
   const revisionCount = tenantsWithStatus.filter((t) => t.paymentStatus === "Revisión").length;
   const totalTenants  = tenantsWithStatus.length;
   const paidPercent   = totalTenants > 0 ? Math.round((cobradoCount / totalTenants) * 100) : 0;
@@ -258,9 +258,9 @@ export function DashboardView({ initialTenants, initialPayments, initialProperti
                     {pendienteCount} pendiente{pendienteCount !== 1 ? "s" : ""}
                   </span>
                 )}
-                {vencidoCount > 0 && (
+                {atrasadoCount > 0 && (
                   <span className="text-red-500 font-medium">
-                    {vencidoCount} vencido{vencidoCount !== 1 ? "s" : ""}
+                    {atrasadoCount} atrasado{atrasadoCount !== 1 ? "s" : ""}
                   </span>
                 )}
               </div>
@@ -309,9 +309,9 @@ export function DashboardView({ initialTenants, initialPayments, initialProperti
               <p className="text-[12px] text-slate-400 mt-0.5 capitalize">{monthLabel}</p>
             </div>
             <div className="flex items-center gap-2">
-              {vencidoCount > 0 && (
+              {atrasadoCount > 0 && (
                 <span className="inline-flex items-center gap-1 bg-red-50 border border-red-200 text-red-600 text-[11px] font-semibold px-2.5 py-1 rounded-full">
-                  <AlertCircle className="w-3 h-3" /> {vencidoCount} vencido{vencidoCount !== 1 ? "s" : ""}
+                  <AlertCircle className="w-3 h-3" /> {atrasadoCount} atrasado{atrasadoCount !== 1 ? "s" : ""}
                 </span>
               )}
               {revisionCount > 0 && (
@@ -359,7 +359,7 @@ export function DashboardView({ initialTenants, initialPayments, initialProperti
           ) : sortedTenants.map((tenant) => {
             const property = properties.find((p) => p.id === tenant.propertyId);
             const ini = initials(tenant.name);
-            const isUrgent = tenant.paymentStatus === "Vencido" || tenant.paymentStatus === "Revisión";
+            const isUrgent = tenant.paymentStatus === "Atrasado" || tenant.paymentStatus === "Revisión";
 
             return (
               <div
@@ -374,7 +374,7 @@ export function DashboardView({ initialTenants, initialPayments, initialProperti
                   <div className={cn(
                     "w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0",
                     tenant.paymentStatus === "Pagado" ? "bg-emerald-50 text-emerald-700" :
-                    tenant.paymentStatus === "Vencido" ? "bg-red-50 text-red-600" :
+                    tenant.paymentStatus === "Atrasado" ? "bg-red-50 text-red-600" :
                     "bg-[#eef1fd] text-[#2952F3]"
                   )}>
                     {ini}
@@ -399,7 +399,7 @@ export function DashboardView({ initialTenants, initialPayments, initialProperti
                     <div className={cn(
                       "w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0",
                       tenant.paymentStatus === "Pagado" ? "bg-emerald-50 text-emerald-700" :
-                      tenant.paymentStatus === "Vencido" ? "bg-red-50 text-red-600" :
+                      tenant.paymentStatus === "Atrasado" ? "bg-red-50 text-red-600" :
                       "bg-[#eef1fd] text-[#2952F3]"
                     )}>
                       {ini}
@@ -439,9 +439,9 @@ export function DashboardView({ initialTenants, initialPayments, initialProperti
                   <CheckCircle2 className="w-3.5 h-3.5" />
                   {cobradoCount} pagado{cobradoCount !== 1 ? "s" : ""}
                 </span>
-                {(pendienteCount + vencidoCount) > 0 && (
+                {(pendienteCount + atrasadoCount) > 0 && (
                   <span className="text-[12px] text-slate-400">
-                    · {pendienteCount + vencidoCount} pendiente{(pendienteCount + vencidoCount) !== 1 ? "s" : ""}
+                    · {pendienteCount + atrasadoCount} pendiente{(pendienteCount + atrasadoCount) !== 1 ? "s" : ""}
                   </span>
                 )}
               </div>

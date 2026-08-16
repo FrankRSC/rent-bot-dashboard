@@ -335,7 +335,7 @@ export default function PropertyDetailPage() {
 
   const paidCount = propertyTenants.filter((t) => t.paymentStatus === "Pagado").length;
   const monthlyTotal = propertyTenants.reduce((s, t) => s + (t.monthlyAmount ? Number(t.monthlyAmount) : 0), 0);
-  const hasAlert = propertyTenants.some((t) => t.paymentStatus === "Vencido" || t.paymentStatus === "Revisión");
+  const hasAlert = propertyTenants.some((t) => t.paymentStatus === "Atrasado" || t.paymentStatus === "Revisión");
 
   return (
     <div className="space-y-5">
@@ -484,7 +484,7 @@ export default function PropertyDetailPage() {
               >
                 <div className={cn("h-1",
                   tenant.paymentStatus === "Pagado" ? "bg-emerald-500"
-                  : tenant.paymentStatus === "Vencido" ? "bg-red-400"
+                  : tenant.paymentStatus === "Atrasado" ? "bg-red-400"
                   : tenant.paymentStatus === "Revisión" ? "bg-purple-400"
                   : "bg-amber-400"
                 )} />

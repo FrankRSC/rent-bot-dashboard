@@ -78,7 +78,7 @@ export function PropiedadesView({ initialProperties, initialTenants }: Propiedad
   );
   const cobradoCount = tenantsWithStatus.filter((t) => t.paymentStatus === "Pagado").length;
   const alertCount = tenantsWithStatus.filter(
-    (t) => t.paymentStatus === "Vencido" || t.paymentStatus === "Revisión"
+    (t) => t.paymentStatus === "Atrasado" || t.paymentStatus === "Revisión"
   ).length;
 
   if (propertiesState.loading) {
@@ -167,7 +167,7 @@ export function PropiedadesView({ initialProperties, initialTenants }: Propiedad
           {properties.map((property) => {
             const tenants = tenantsWithStatus.filter((t) => t.propertyId === property.id);
             const monthlyTotal = tenants.reduce((s, t) => s + (t.monthlyAmount ? Number(t.monthlyAmount) : 0), 0);
-            const hasAlert = tenants.some((t) => t.paymentStatus === "Vencido" || t.paymentStatus === "Revisión");
+            const hasAlert = tenants.some((t) => t.paymentStatus === "Atrasado" || t.paymentStatus === "Revisión");
             const allPaid = tenants.length > 0 && tenants.every((t) => t.paymentStatus === "Pagado");
 
             return (

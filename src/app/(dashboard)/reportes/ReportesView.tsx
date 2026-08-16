@@ -227,7 +227,7 @@ export function ReportesView({
           <p className="text-[14px] font-semibold text-[#0B1426]">Por propiedad</p>
         </div>
         <div className="grid grid-cols-[1fr_auto_auto_auto_auto_160px] gap-x-4 px-6 py-2.5 border-b border-slate-100 bg-slate-50/50">
-          {["Propiedad", "Cobrado", "Pagados", "Pendientes", "Vencidos", "% Cobro"].map((h) => (
+          {["Propiedad", "Cobrado", "Pagados", "Pendientes", "Atrasados", "% Cobro"].map((h) => (
             <p key={h} className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest">{h}</p>
           ))}
         </div>
