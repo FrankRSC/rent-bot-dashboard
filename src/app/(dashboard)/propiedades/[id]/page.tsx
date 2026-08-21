@@ -9,30 +9,18 @@ const ACCOUNT_TYPE_LABEL: Record<string, string> = {
 };
 import { useParams, notFound } from "next/navigation";
 import { format } from "date-fns";
-import { ArrowLeft, Plus, Pencil, Trash2, CheckCircle2, Bell, BellOff, Save, X, CalendarDays, Banknote, Users, Building2, AlertTriangle, FileText } from "lucide-react";
+import { ArrowLeft, Plus, Pencil, Trash2, CheckCircle2, Bell, BellOff, Save, X, CalendarDays, Banknote, Users, Building2, AlertTriangle, FileText, SlidersHorizontal } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useStore } from "@/store/useStore";
-import { cn, formatPhone, formatCurrency } from "@/lib/utils";
+import { cn, formatPhone, formatCurrency, isDelinquent } from "@/lib/utils";
 import type { AccountType, TenantWithStatus } from "@/lib/types";
 import { PaymentStatusBadge } from "@/components/ui/StatusBadge";
 import * as api from "@/lib/api";
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function apiError(err: unknown): string {
-  if (!(err instanceof Error)) return "Error al guardar";
-  const body = err.message.replace(/^\d+:\s*/, "");
-  try {
-    const p = JSON.parse(body) as { message?: unknown };
-    const m = p.message;
-    if (Array.isArray(m)) return (m as string[]).join(", ");
-    if (typeof m === "string") return m;
-  } catch { /* fall through */ }
-  return "Error al guardar. Inténtalo de nuevo.";
-}
+import { apiError } from "@/lib/api-error";
 
 // ── Vigencia de contrato y ajuste de renta (§2.3 CONTRATOS_API.md) ───────────
 type ContractValues = {
@@ -75,7 +63,7 @@ function ContractFields({ values, onChange }: { values: ContractValues; onChange
   );
 }
 
-function AddTenantDialog({ open, propertyId, onClose }: { open: boolean; propertyId: number; onClose: () => void }) {
+function AddTenantDialog({ open, propertyId, onClose }: { open: boolean; propertyId: string; onClose: () => void }) {
   const { createTenant } = useStore();
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -284,6 +272,146 @@ function EditTenantDialog({ tenant, onClose }: { tenant: TenantWithStatus; onClo
   );
 }
 
+// ── Ajuste puntual de renta (§2.3 CONTRATOS_API.md) ──────────────────────────
+function PeriodAdjustmentDialog({ tenant, onClose, onSaved }: {
+  tenant: TenantWithStatus;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const currentYM = new Date().toISOString().slice(0, 7);
+  const existing = tenant.periodAdjustment;
+  const [billingPeriod, setBillingPeriod] = useState(existing?.billingPeriod ?? currentYM);
+  const [amount, setAmount] = useState(existing ? String(existing.expectedAmount) : String(tenant.monthlyAmount ?? ""));
+  const [reason, setReason] = useState(existing?.reason ?? "");
+  const [saving, setSaving] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const hasExistingForPeriod = existing && existing.billingPeriod === billingPeriod;
+
+  const handleSave = async () => {
+    const parsed = parseFloat(amount);
+    if (!billingPeriod || isNaN(parsed) || parsed <= 0) {
+      setError("Ingresa un monto válido mayor a cero.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await api.setPeriodAdjustment(tenant.id, {
+        billingPeriod,
+        expectedAmount: parsed,
+        reason: reason.trim() || undefined,
+      });
+      await onSaved();
+      onClose();
+    } catch {
+      setError("No se pudo guardar el ajuste. Intenta de nuevo.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRemove = async () => {
+    if (!billingPeriod) return;
+    setRemoving(true);
+    setError(null);
+    try {
+      await api.removePeriodAdjustment(tenant.id, billingPeriod);
+      await onSaved();
+      onClose();
+    } catch {
+      setError("No se pudo quitar el ajuste. Intenta de nuevo.");
+    } finally {
+      setRemoving(false);
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Ajuste puntual de renta</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 px-4 py-3">
+          <p className="text-[12px] text-slate-500 leading-snug">
+            Cambia la renta esperada solo para el mes indicado, sin modificar la renta base del contrato. El bot usa este monto al calcular si el pago es suficiente.
+          </p>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">Mes a ajustar</label>
+            <Input
+              type="month"
+              value={billingPeriod}
+              onChange={(e) => {
+                setBillingPeriod(e.target.value);
+                setError(null);
+              }}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">
+              Monto esperado
+              {tenant.monthlyAmount && (
+                <span className="text-slate-400 font-normal ml-1.5">
+                  (renta base: ${Number(tenant.monthlyAmount).toLocaleString("es-MX")})
+                </span>
+              )}
+            </label>
+            <Input
+              type="number"
+              placeholder="$0.00"
+              value={amount}
+              onChange={(e) => { setAmount(e.target.value); setError(null); }}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">Motivo (opcional)</label>
+            <Input
+              placeholder="Ej. Descuento por gastos de reparación"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+            />
+          </div>
+          {hasExistingForPeriod && (
+            <div className="flex items-center gap-2 px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-xl">
+              <SlidersHorizontal className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+              <p className="text-[12px] text-amber-700">
+                Ya hay un ajuste de ${Number(existing.expectedAmount).toLocaleString("es-MX")} para este mes.
+                Guardar lo sobreescribirá.
+              </p>
+            </div>
+          )}
+          {error && <p className="text-[12px] text-red-600">{error}</p>}
+        </div>
+        <DialogFooter className="flex flex-col sm:flex-row gap-2">
+          {hasExistingForPeriod && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-red-600 border-red-200 hover:bg-red-50 sm:mr-auto"
+              onClick={handleRemove}
+              disabled={removing || saving}
+            >
+              {removing ? "Quitando..." : "Quitar ajuste"}
+            </Button>
+          )}
+          <Button variant="outline" size="sm" onClick={onClose} disabled={saving || removing}>
+            Cancelar
+          </Button>
+          <Button
+            size="sm"
+            className="bg-[#2952F3] hover:bg-[#1e3fd4]"
+            onClick={handleSave}
+            disabled={saving || removing}
+          >
+            {saving ? "Guardando..." : "Guardar ajuste"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // Estado de vigencia derivado de las fechas del contrato (comparación lexicográfica
 // de strings YYYY-MM-DD). Fuera de rango → el bot rechaza los comprobantes (§2.3).
 function contractInfo(t: TenantWithStatus) {
@@ -300,8 +428,8 @@ const fmtDay = (d: string) => format(new Date(d + "T12:00:00"), "dd/MM/yy");
 
 export default function PropertyDetailPage() {
   const params = useParams();
-  const id = parseInt(params.id as string, 10);
-  const { properties, tenantsWithStatus, tenantsState, updateProperty, removeTenant, fetchTenantsForProperty } = useStore();
+  const id = params.id as string;
+  const { properties, tenantsWithStatus, tenantsState, updateProperty, removeTenant, fetchTenantsForProperty, fetchAllTenants } = useStore();
 
   const property = properties.find((p) => p.id === id);
   const propertyTenants = tenantsWithStatus.filter((t) => t.propertyId === id);
@@ -309,12 +437,13 @@ export default function PropertyDetailPage() {
   const [editing, setEditing] = useState(false);
   const [addTenantOpen, setAddTenantOpen] = useState(false);
   const [editingTenant, setEditingTenant] = useState<TenantWithStatus | null>(null);
-  const [deletingId, setDeletingId] = useState<number | null>(null);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [adjustingTenant, setAdjustingTenant] = useState<TenantWithStatus | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ name: property?.name ?? "" });
 
   useEffect(() => {
-    if (!isNaN(id)) fetchTenantsForProperty(id);
+    if (id) fetchTenantsForProperty(id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -328,14 +457,14 @@ export default function PropertyDetailPage() {
     setEditing(false);
   };
 
-  const handleDelete = async (tenantId: number) => {
+  const handleDelete = async (tenantId: string) => {
     setDeletingId(tenantId);
     try { await removeTenant(tenantId); } finally { setDeletingId(null); }
   };
 
   const paidCount = propertyTenants.filter((t) => t.paymentStatus === "Pagado").length;
   const monthlyTotal = propertyTenants.reduce((s, t) => s + (t.monthlyAmount ? Number(t.monthlyAmount) : 0), 0);
-  const hasAlert = propertyTenants.some((t) => t.paymentStatus === "Vencido" || t.paymentStatus === "Revisión");
+  const hasAlert = propertyTenants.some((t) => isDelinquent(t.paymentStatus) || t.paymentStatus === "Revisión");
 
   return (
     <div className="space-y-5">
@@ -482,11 +611,14 @@ export default function PropertyDetailPage() {
                 className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden"
                 style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
               >
+                {/* Misma escala que PAYMENT_STATUS_CLS: gris = en plazo, ámbar = se
+                    le acabó la gracia, rojo = el mes cerró sin pago. */}
                 <div className={cn("h-1",
                   tenant.paymentStatus === "Pagado" ? "bg-emerald-500"
                   : tenant.paymentStatus === "Vencido" ? "bg-red-400"
+                  : tenant.paymentStatus === "Atrasado" ? "bg-amber-400"
                   : tenant.paymentStatus === "Revisión" ? "bg-purple-400"
-                  : "bg-amber-400"
+                  : "bg-slate-300"
                 )} />
 
                 <div className="p-5 flex flex-col gap-4">
@@ -561,7 +693,10 @@ export default function PropertyDetailPage() {
                           {contract.outOfRange ? (
                             <span className="text-[10px] font-semibold text-red-600 bg-red-50 border border-red-200 rounded-full px-2 py-[2px] shrink-0 whitespace-nowrap">Fuera de vigencia</span>
                           ) : (
-                            <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-[2px] shrink-0 whitespace-nowrap">Vigente</span>
+                            /* "Contrato activo" y no "Vigente": desde 2026-08-16
+                               `Vigente` es un paymentStatus, y las dos etiquetas
+                               conviven en esta misma tarjeta. */
+                            <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-[2px] shrink-0 whitespace-nowrap">Contrato activo</span>
                           )}
                         </div>
                       )}
@@ -576,13 +711,40 @@ export default function PropertyDetailPage() {
                     </div>
                   )}
 
-                  <div className="pt-1 border-t border-slate-100 flex justify-between">
-                    <button
-                      className="flex items-center gap-1 text-[12px] text-slate-500 hover:text-[#2952F3] font-medium px-2 py-1 rounded-lg hover:bg-[#eef1fd] transition-colors"
-                      onClick={() => setEditingTenant(tenant)}
-                    >
-                      <Pencil className="w-3.5 h-3.5" /> Editar
-                    </button>
+                  {tenant.periodAdjustment && (
+                    <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                      <SlidersHorizontal className="w-3 h-3 text-amber-600 shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[11px] font-semibold text-amber-800">
+                          Renta ajustada este mes: ${Number(tenant.periodAdjustment.expectedAmount).toLocaleString("es-MX")}
+                        </p>
+                        {tenant.periodAdjustment.reason && (
+                          <p className="text-[10px] text-amber-600 truncate">{tenant.periodAdjustment.reason}</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="pt-1 border-t border-slate-100 flex justify-between items-center">
+                    <div className="flex gap-1">
+                      <button
+                        className="flex items-center gap-1 text-[12px] text-slate-500 hover:text-[#2952F3] font-medium px-2 py-1 rounded-lg hover:bg-[#eef1fd] transition-colors"
+                        onClick={() => setEditingTenant(tenant)}
+                      >
+                        <Pencil className="w-3.5 h-3.5" /> Editar
+                      </button>
+                      <button
+                        className={cn(
+                          "flex items-center gap-1 text-[12px] font-medium px-2 py-1 rounded-lg transition-colors",
+                          tenant.periodAdjustment
+                            ? "text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                            : "text-slate-500 hover:text-[#2952F3] hover:bg-[#eef1fd]"
+                        )}
+                        onClick={() => setAdjustingTenant(tenant)}
+                      >
+                        <SlidersHorizontal className="w-3.5 h-3.5" /> Ajuste de mes
+                      </button>
+                    </div>
                     <button
                       className="flex items-center gap-1 text-[12px] text-red-500 hover:text-red-700 font-medium px-2 py-1 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50"
                       onClick={() => setConfirmDeleteId(tenant.id)}
@@ -602,6 +764,13 @@ export default function PropertyDetailPage() {
       <AddTenantDialog open={addTenantOpen} propertyId={id} onClose={() => setAddTenantOpen(false)} />
       {editingTenant && (
         <EditTenantDialog tenant={editingTenant} onClose={() => setEditingTenant(null)} />
+      )}
+      {adjustingTenant && (
+        <PeriodAdjustmentDialog
+          tenant={adjustingTenant}
+          onClose={() => setAdjustingTenant(null)}
+          onSaved={fetchAllTenants}
+        />
       )}
 
       <Dialog open={confirmDeleteId !== null} onOpenChange={() => setConfirmDeleteId(null)}>

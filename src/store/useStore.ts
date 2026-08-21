@@ -8,6 +8,7 @@ import type {
   PaymentStatus,
   Factura,
   FacturaStatus,
+  SubscriptionStatusView,
 } from "@/lib/types";
 import * as api from "@/lib/api";
 
@@ -39,7 +40,7 @@ interface LoadState {
 type BotStatus = "checking" | "online" | "offline";
 
 interface AppState {
-  landlordId: number;
+  landlordId: string;
   authenticated: boolean;
   authReady: boolean;
   isAdmin: boolean;
@@ -58,6 +59,9 @@ interface AppState {
 
   botStatus: BotStatus;
   settings: GlobalSettings;
+  // null = aún no cargada o no se pudo leer. `hasSubscription: false` es distinto:
+  // significa "sin plan asignado", y ese caso NO se bloquea (§2.10).
+  subscription: SubscriptionStatusView | null;
 
   hydrateAuth: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
@@ -66,31 +70,32 @@ interface AppState {
 
   fetchProperties: () => Promise<void>;
   fetchAllTenants: () => Promise<void>;
-  fetchTenantsForProperty: (propertyId: number) => Promise<void>;
+  fetchTenantsForProperty: (propertyId: string) => Promise<void>;
   fetchPayments: () => Promise<void>;
   fetchLandlordSettings: () => Promise<void>;
+  fetchSubscription: () => Promise<void>;
   checkHealth: () => Promise<void>;
 
   createProperty: (
     data: Parameters<typeof api.createProperty>[1]
   ) => Promise<Property>;
   updateProperty: (
-    id: number,
+    id: string,
     data: Parameters<typeof api.updateProperty>[1]
   ) => Promise<void>;
-  removeProperty: (id: number) => Promise<void>;
+  removeProperty: (id: string) => Promise<void>;
 
   createTenant: (
-    propertyId: number,
+    propertyId: string,
     data: Parameters<typeof api.createTenant>[1]
   ) => Promise<Tenant>;
   updateTenant: (
-    id: number,
+    id: string,
     data: Parameters<typeof api.updateTenant>[1]
   ) => Promise<void>;
-  removeTenant: (id: number) => Promise<void>;
+  removeTenant: (id: string) => Promise<void>;
 
-  sendReminder: (tenantId: number) => Promise<void>;
+  sendReminder: (tenantId: string) => Promise<void>;
   updateSettings: (updates: Partial<GlobalSettings>) => void;
 
   fetchFacturas: () => Promise<void>;
@@ -98,12 +103,15 @@ interface AppState {
   cancelFactura: (id: string, data: Parameters<typeof api.cancelFactura>[1]) => Promise<void>;
 
   _recomputeTenantsWithStatus: () => void;
+
+  tourActive: boolean;
+  setTourActive: (active: boolean) => void;
 }
 
 // ── Store ─────────────────────────────────────────────────────────────────────
 
 export const useStore = create<AppState>((set, get) => ({
-  landlordId: 0,
+  landlordId: "",
   authenticated: false,
   authReady: false,
   isAdmin: false,
@@ -121,6 +129,9 @@ export const useStore = create<AppState>((set, get) => ({
   facturasState: { loading: false, error: null },
 
   botStatus: "checking",
+  subscription: null,
+  tourActive: false,
+  setTourActive: (active) => set({ tourActive: active }),
 
   settings: {
     landlordName: "",
@@ -131,6 +142,7 @@ export const useStore = create<AppState>((set, get) => ({
     beneficiaryAccountType: "CLABE",
     autoRemindersEnabled: true,
     defaultReminderDays: 3,
+    defaultGraceDays: 3, // mismo valor inicial que usa el backend
     notifyOnPayment: true,
     notifyOnOverdue: true,
     rfc: "",
@@ -156,7 +168,7 @@ export const useStore = create<AppState>((set, get) => ({
       const msg = (e as Error).message ?? "";
       if (msg.startsWith("401")) {
         // Sin cookie válida: no hay sesión → a login.
-        set({ authenticated: false, landlordId: 0, isAdmin: false, impersonatedBy: null, authReady: true });
+        set({ authenticated: false, landlordId: "", isAdmin: false, impersonatedBy: null, authReady: true });
       } else {
         // Backend caído / error transitorio: no expulsamos por un 5xx/red;
         // dejamos entrar (optimista) para que el dashboard muestre el banner.
@@ -184,7 +196,7 @@ export const useStore = create<AppState>((set, get) => ({
     } catch {
       // Aunque el logout del servidor falle, limpiamos el estado local igual.
     }
-    set({ authenticated: false, landlordId: 0, isAdmin: false, impersonatedBy: null });
+    set({ authenticated: false, landlordId: "", isAdmin: false, impersonatedBy: null });
     if (typeof window !== "undefined") window.location.href = "/login";
   },
 
@@ -280,6 +292,18 @@ export const useStore = create<AppState>((set, get) => ({
     } catch {
       // No bloquea el arranque: la página de Configuración muestra su propio
       // error de carga y el ConnectionBanner cubre la caída del backend.
+    }
+  },
+
+  // Estado del plan del arrendador (§2.10). Solo lectura: el pago es en efectivo
+  // fuera de la plataforma. Si falla se deja en null y el banner no se pinta —
+  // nunca se bloquea la app por no poder leer la suscripción.
+  fetchSubscription: async () => {
+    try {
+      const sub = await api.getSubscriptionStatus(get().landlordId);
+      set({ subscription: sub });
+    } catch {
+      set({ subscription: null });
     }
   },
 
@@ -383,21 +407,28 @@ export const useStore = create<AppState>((set, get) => ({
 
   _recomputeTenantsWithStatus: () => {
     const { tenants, allTenants } = get();
-    const statusMap = new Map<number, { paymentStatus: PaymentStatus; lastPaymentDate: string | null }>();
+    type AllTenantsStatus = {
+      paymentStatus: PaymentStatus;
+      lastPaymentDate: string | null;
+      periodAdjustment: Tenant["periodAdjustment"];
+    };
+    const statusMap = new Map<string, AllTenantsStatus>();
     allTenants.forEach((t) => {
-      if (t.paymentStatus) {
-        statusMap.set(t.id, {
-          paymentStatus: t.paymentStatus,
-          lastPaymentDate: t.lastPaymentDate ?? null,
-        });
-      }
+      statusMap.set(t.id, {
+        // `Vigente` es el fallback correcto: es lo que manda el backend cuando no
+        // hay cómo juzgar el plazo (sin `paymentDay`). Nunca asumir moroso.
+        paymentStatus: t.paymentStatus ?? "Vigente",
+        lastPaymentDate: t.lastPaymentDate ?? null,
+        periodAdjustment: t.periodAdjustment ?? null,
+      });
     });
     const withStatus: TenantWithStatus[] = tenants.map((tenant) => {
       const backend = statusMap.get(tenant.id);
       return {
         ...tenant,
-        paymentStatus: backend?.paymentStatus ?? "Pendiente",
+        paymentStatus: backend?.paymentStatus ?? "Vigente",
         lastPaymentDate: backend?.lastPaymentDate ?? null,
+        periodAdjustment: backend?.periodAdjustment ?? tenant.periodAdjustment ?? null,
         reminderSent: reminderSentThisMonth(tenant.lastReminderAt),
       };
     });

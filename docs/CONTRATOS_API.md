@@ -52,6 +52,7 @@ Base path efectiva en el backend (sin el prefijo `/api` del rewrite).
 | `getLandlords()` | GET | `/landlords` | — | `Landlord[]` — **solo admin** (`AdminOnlyGuard`); `403` para landlords normales |
 | `registerLandlord(data)` | POST | `/landlords` | `{name, email, phone, password}` — **público, sin auth**. `409` si email ya existe. `400` si falta campo o password < 8 chars (`ValidationPipe whitelist+forbid`). | `Landlord` |
 | *(sin fn aún)* | DELETE | `/landlords/:id` | — | `204 / void` |
+| *(sin fn aún)* | GET | `/landlords/:id/subscription` | — | `SubscriptionStatusView` — estado del plan para el banner (§2.10) |
 
 > `PATCH /landlords/:id/fiscal` lo sirve el **módulo de facturación** (`FacturasController`, con DTO validado por whitelist); la ruta y el contrato no cambian para el cliente.
 
@@ -140,7 +141,78 @@ un cambio **permanente** de renta:
 
 **`Tenant`** (`types.ts:50`): incluye `phone` en formato `52XXXXXXXXXX`, y campos opcionales de cuenta/renta/fiscales. **NUEVO — normalización de teléfonos (backend):** todo `phone` que entre por `createTenant`/`updateTenant` (y por `POST/PATCH /landlords`) se normaliza antes de guardar: se descartan no-dígitos; 10 dígitos → se antepone `52`; `521XXXXXXXXXX` (formato viejo de Meta) → `52XXXXXXXXXX`. El UI puede mandar los 10 dígitos tal cual los captura; el backend siempre guarda y devuelve `52XXXXXXXXXX`. Las filas existentes ya fueron migradas a este formato. `paymentStatus` y `lastPaymentDate` sólo vienen poblados desde `getAllTenants`. **NUEVO:** `lastReminderAt: string | null` (ISO, `null` si nunca) — viene en **todas** las respuestas de tenant, incluida `GET /landlords/:id/tenants` (cierra G5: el estado de recordatorio ya es del servidor).
 
-**`paymentStatus`** (solo desde `getAllTenants`) — estado del mes en curso: `"Pagado"` (los abonos del mes cubren `monthlyAmount`; **sin tolerancia** — cubre si `paid >= monthlyAmount`), `"Parcial"` (hay abonos pero no cubren la renta, i.e. `paid < monthlyAmount`), `"Revisión"` (hay intentos rechazados/erróneos/en revisión este mes — status `REJECTED`, `ERROR`, `ABANDONED` o `REVIEW`), `"Vencido"` (sin pago este mes pero pagó en meses previos), `"Pendiente"` (sin actividad). Cuenta `VERIFIED`, `MANUAL_VERIFIED` y `PARTIAL` como pagado. Para el desglose exacto esperado/pagado/restante usa `PeriodBalance` (`GET /payments/manual/balance/:tenantId`).
+**`paymentStatus`** (solo desde `getAllTenants`) — estado del mes en curso: `"Pagado"` (los abonos del mes cubren `monthlyAmount`; **sin tolerancia** — cubre si `paid >= monthlyAmount`), `"Parcial"` (hay abonos pero no cubren la renta, i.e. `paid < monthlyAmount`), `"Revisión"` (hay intentos rechazados/erróneos/en revisión este mes — status `REJECTED`, `ERROR`, `ABANDONED` o `REVIEW`), **`"Vigente"`** (sin pago, dentro de su plazo), **`"Atrasado"`** (se le acabó la gracia y el mes sigue corriendo), **`"Vencido"`** (el mes cerró sin pago). Cuenta `VERIFIED`, `MANUAL_VERIFIED` y `PARTIAL` como pagado. Para el desglose exacto esperado/pagado/restante usa `PeriodBalance` (`GET /payments/manual/balance/:tenantId`).
+
+> ### ⚠️ CAMBIO (2026-08-16): días de gracia. `"Pendiente"` → `"Vigente"`, y `"Vencido"` vuelve con otro significado
+>
+> **Reemplaza al aviso anterior del mismo día** (el que decía que `"Vencido"` quedaba reservado). La
+> escala final tiene tres estados de tiempo de pago, no dos:
+>
+> | Estado | Cuándo |
+> |---|---|
+> | `"Vigente"` | Dentro de su plazo: **día de pago + días de gracia** |
+> | `"Atrasado"` | Se le acabó la gracia y el mes sigue corriendo |
+> | `"Vencido"` | El mes cerró sin pago |
+>
+> Ejemplo: `paymentDay = 8` con 3 de gracia → **Vigente** hasta el día 11 completo, **Atrasado** del 12 en
+> adelante, **Vencido** cuando cierra el mes. El plazo cuenta completo (el día 11 todavía es vigente).
+>
+> **`"Pendiente"` ya no se emite** — lo sustituye `"Vigente"`. Sin `paymentDay` configurado siempre sale
+> `"Vigente"` (no hay cómo juzgar el plazo).
+>
+> **⚠️ Ojo con `"Vigente"`:** ya usan esa palabra como etiqueta de **vigencia del contrato**
+> (`propiedades/[id]/page.tsx:693`, junto al rango de fechas). Son cosas distintas y ahora conviven en la
+> misma tarjeta: una es el contrato, otra el tiempo de pago. Vale la pena diferenciarlas visualmente o
+> renombrar una de las dos en el UI — decisión suya.
+>
+> **Nuevos campos configurables:**
+> - `Tenant.graceDays: number | null` — gracia de ese inquilino; `null` = hereda la del arrendador.
+>   Editable por `POST/PATCH` de tenant.
+> - `Landlord.defaultGraceDays: number` — default del arrendador (**valor inicial 3**, rango 0–28).
+>   Editable por `PATCH /landlords/:id`.
+> - La del inquilino gana sobre la del arrendador, **incluso cuando es `0`** (0 = sin gracia, no
+>   "sin configurar").
+>
+> **Conteos de `GET /landlords/:id/report`:** se agregó **`vigenteCount`**; `pendienteCount` queda como
+> **alias deprecado** con el mismo valor para no romperlos. `atrasadoCount` y `vencidoCount` ahora cuentan
+> cosas distintas entre sí (antes `vencidoCount` era alias de `atrasadoCount` — ya no lo es).
+>
+> **Qué tiene que cambiar el front:** añadir `"Vigente"` al union `PaymentStatus` y a los mapas de
+> estilos, y revisar que las ramas de `"Atrasado"`/`"Vencido"` sigan teniendo sentido con los
+> significados nuevos. Regeneren `backend-schema.ts`. Si no lo hacen, los inquilinos en `"Vigente"` caen
+> al estilo por defecto — **falla en silencio, no rompe**.
+
+> ### ⚠️ CAMBIO (2026-08-20): `GET /landlords/:id/report` — los importes ahora son un saldo
+>
+> Aplicado. El reporte estaba mal en **dos direcciones opuestas** según cómo hubiera quedado registrado
+> el abono:
+>
+> | Caso | Antes | Ahora |
+> |---|---|---|
+> | Intento con status `PARTIAL` | No contaba como `Pagado` → `totalPendiente` sumaba la renta **completa** | Suma solo el saldo |
+> | Intento `VERIFIED` por menos de la renta | Contaba como `Pagado` → **salía del pendiente entero** | Suma el saldo |
+>
+> **`byTenant[].amountPaid` cambia de significado.** Pasa de "lo del único intento verificado" a **"lo
+> abonado en el mes"**: suma de todos los intentos `VERIFIED`, `MANUAL_VERIFIED` y `PARTIAL`. Si lo
+> pintan en la tabla de reportes (lo hacen), el número que ve el arrendador se mueve hacia arriba.
+> `null` sigue significando "no hubo abonos".
+>
+> **`summary.totalPendiente`** = `Σ max(0, monthlyAmount − amountPaid)` sobre **todos** los inquilinos,
+> no solo los que no están `Pagado`. Un sobrepago no genera pendiente negativo.
+>
+> **`summary.totalCobrado`** = suma de `amountPaid` de todos. Con eso
+> `totalCobrado + totalPendiente` = renta del mes, que antes no se cumplía.
+>
+> **Campos nuevos en `summary`** (el importe por bucket que pidieron; los conteos ya los tenían):
+> `vigenteAmount`, `atrasadoAmount`, `vencidoAmount`. Suman exactamente `totalPendiente`.
+> Ojo con el nombre: son `<estado>Amount`, siguiendo `<estado>Count` — **no** `montoVigente`, como
+> se dijo en el canal de sync antes de implementarlo.
+>
+> **`monthlyTrend`** pasa a contar los mismos statuses que el resto del reporte (`VERIFIED`,
+> `MANUAL_VERIFIED`, `PARTIAL`); antes solo verificados, así que la gráfica y el KPI se contradecían en
+> el mes en curso.
+>
+> **`paymentStatus` no cambia:** un `VERIFIED` insuficiente sigue saliendo `"Pagado"`. Solo importes.
 
 > ✅ **`"Parcial"` implementado y activo (2026-07-25: no está "pendiente de deploy", es parte del código igual que el resto del backend — no hay entorno compartido persistente, cada lado lo corre localmente para probar).** `getAllTenants` ya compara los abonos del mes contra `monthlyAmount` y devuelve `"Parcial"` cuando `paid < monthlyAmount` (`landlords.service.ts:163-166`, usa el mismo `AMOUNT_TOLERANCE` compartido). **Cambio de regla (2026-07-22):** se eliminó la tolerancia de $1 — ahora **cualquier pago menor al 100% de la renta es parcial** (ej. renta 100, pago 99 → `"Parcial"`, faltante 1). Mismo criterio en el bot de WhatsApp y en el modo manual (`AMOUNT_TOLERANCE = 0`). El frontend ya lo tipa en `PaymentStatus`. Para el desglose exacto usa `GET /payments/manual/balance/:tenantId?period=YYYY-MM` (§2.7).
 
@@ -290,6 +362,8 @@ front:
 ```
 Flujo `INCOMPLETE`: el intento queda `PENDING` con lo detectado guardado; el UI muestra un formulario con `missingFields`, y manda **solo esos campos** a `POST /payments/manual/attempts/:id/complete` (mismo `ReceiptValidationResult` de vuelta, sin re-subir el archivo).
 
+**`data` en `ReceiptValidationResult`** (todos los status) trae, además de los campos primitivos de §2.4, dos exclusivos de este endpoint (ausentes en `PaymentAttempt.ocrData` del bot): `cuentaDestino` (cuenta completa/registrada **esperada**, no lo que leyó el OCR — ojo con el nombre) y `ocrCuentaDestino` (cuenta completa que sí leyó el OCR del comprobante). **Nuevo (2026-08-05):** `ocrLast4Destino?: string | null` — últimos 4 dígitos leídos, fallback para comprobantes que enmascaran la cuenta completa (caso común BBVA/Dimo). Antes de esta fecha, un intrabancario sin cuenta completa legible siempre caía en `ERROR`; ahora, si hay `ocrLast4Destino` y coincide con la cuenta registrada → `VERIFIED`; si no coincide → `REJECTED` con el mismo formato de mensaje que el caso de cuenta completa (`"La cuenta destino del comprobante (****XXXX) no coincide con la cuenta beneficiaria registrada (****YYYY)."`). `ERROR` ("no se pudo leer la cuenta destino...") queda reservado para cuando no hay ninguna señal (ni cuenta completa ni último-4). Cambio aditivo, no rompe los status ya manejados — solo cambia cuándo se llega a cada uno (menos `ERROR`s, resueltos correctamente como `VERIFIED`/`REJECTED`).
+
 **`PeriodBalance`** — fuente de verdad del estado de cobranza de un inquilino en un periodo (soporta abonos):
 ```ts
 { tenantId: number; tenantName: string;
@@ -325,7 +399,7 @@ Documentados para que nadie los "descubra" y los use por accidente:
 
 ### 2.9 Auth multi-tenant — ✅ **backend listo — levantado y VERIFICADO en local (`:3001`)**
 
-Implementado exactamente como esta sección y **verificado end-to-end contra la BD local** (2026-07-22): `POST /auth/login` → **200** `{ accessToken, landlord }` (401 credenciales inválidas), `GET /me` (Bearer → Landlord, 401 sin/mal token), JWT HS256 `{ sub, email }` 24 h, guard de ownership en `/landlords/:id/*` (200 dueño / 403 ajeno / 401 sin token), `password` con bcrypt y **nunca** devuelto (ni en login, ni en `/me`, ni en el schema OpenAPI). 274 tests en verde. **Credenciales de prueba** (seed): `carlos@rentdemo.com` / `SaveTime123!` (landlord id **3** en la BD sembrada → `NEXT_PUBLIC_LANDLORD_ID=3`; el login es por email, el id solo importa para el ownership). Coordinar la ventana para conectar login + header `Authorization` y quitar `NEXT_PUBLIC_LANDLORD_ID` (al activar el guard, `/landlords/:id/*` sin token da 401).
+Implementado exactamente como esta sección y **verificado end-to-end contra la BD local** (2026-07-22): `POST /auth/login` → **200** `{ accessToken, landlord }` (401 credenciales inválidas), `GET /me` (Bearer → Landlord, 401 sin/mal token), JWT HS256 `{ sub, email }` 24 h, guard de ownership en `/landlords/:id/*` (200 dueño / 403 ajeno / 401 sin token), `password` con bcrypt y **nunca** devuelto (ni en login, ni en `/me`, ni en el schema OpenAPI). 274 tests en verde. **Credenciales de prueba** (seed): `test-landlord@rentdemo.com` / `SaveTime123!` (landlord id dinámico — se asigna al sembrar, no hardcodear). ⚠️ **No usar `carlos@rentdemo.com` para las pruebas E2E**: ese email está en `ADMIN_EMAILS` del backend, por lo que el login devuelve `isAdmin:true` y el UI redirige a `/admin` en lugar de `/dashboard`. Las pruebas de integración Playwright (`e2e/integration/`) usan el email de prueba exclusivo y el `global-setup.ts` limpia ambos emails históricos del seed antes de cada run.
 
 | Método | Ruta | Body | Respuesta |
 |---|---|---|---|
@@ -459,6 +533,132 @@ DatasetCaseSource = "complete"   // se completaron campos que OCR/IA no leyó
 ```
 
 UI en `/admin/dataset`: tabla con filas expandibles. Click en una fila muestra diff rojo (original) → verde (corregido); campos sin cambio en gris.
+
+#### Planes y suscripciones — ✅ **backend listo (2026-08-15), UI pendiente**
+
+> **El backend NO cobra.** La suscripción a SAVE TIME se paga **en efectivo, fuera de la plataforma**, y el super admin captura lo que recibió. No hay pasarela de pago ni checkout: no existen endpoints de cobro.
+
+Precio **por inquilino activo al mes**, con escalón por volumen (los precios de la landing):
+
+| Escalón | Inquilinos | Precio por inquilino / mes |
+|---|---|---|
+| 1 | 1 – 3 | $249 MXN |
+| 2 | 4 – 9 | $199 MXN (−20%) |
+| 3 | 10 o más | $149 MXN (−40%) |
+
+> **La unidad es el inquilino, no la propiedad.** Todo el trabajo del sistema cuelga del inquilino (teléfono, monto, día de pago, OCR, CEP, recordatorio, CFDI) y una propiedad puede alojar N. **Crear propiedades es libre y no tiene tope**; el tope se aplica al dar de alta inquilinos. Si el UI muestra consumo del plan, cuente inquilinos.
+
+**Catálogo de planes** (editable por admin; cambiar un precio no requiere deploy):
+
+| Método | Ruta backend | Body | Respuesta |
+|---|---|---|---|
+| GET | `/admin/plans?includeInactive=true` | — | `Plan[]` |
+| POST | `/admin/plans` | `{name, minTenants, maxTenants?, pricePerTenant, description?, isActive?}` | `Plan` |
+| PATCH | `/admin/plans/:id` | `Partial<CreatePlan>` | `Plan` |
+
+**Suscripción del arrendador:**
+
+| Método | Ruta backend | Body | Respuesta |
+|---|---|---|---|
+| GET | `/admin/subscriptions` | — | `LandlordSubscription[]` (incluye `landlord` y **`tenantsUsed`**) |
+| POST | `/admin/subscriptions` | `{landlordId, contractedTenants, planId?, status?, startDate?, months?, notes?}` | `LandlordSubscription` |
+| PATCH | `/admin/subscriptions/:id` | `{contractedTenants?, planId?, status?, currentPeriodEnd?, notes?}` | `LandlordSubscription` |
+| DELETE | `/admin/subscriptions/:id` | — | `204` — quita el plan; `409` si ya tiene pagos |
+| POST | `/admin/subscriptions/:id/payments` | `{amount?, paidAt?, billingPeriod?, notes?}` | `{payment, subscription}` |
+| GET | `/admin/subscriptions/:id/payments` | — | `SubscriptionPayment[]` |
+
+Todas responden `403` si el token no es de admin y `401` sin token. Cada acción queda en `admin_audit_logs`.
+
+```ts
+Plan {
+  id:string; name:string;
+  minTenants:number; maxTenants:number|null;  // null = escalón "10 o más", sin techo
+  pricePerTenant:number; description:string|null;
+  isActive:boolean; createdAt:string;
+}
+
+LandlordSubscription {
+  id:string; landlordId:string; planId:string; plan:Plan;
+  tenantsUsed?:number;           // SOLO en GET /admin/subscriptions: consumo real (inquilinos vivos)
+  contractedTenants:number;      // TOPE contratado de inquilinos, no un conteo
+  monthlyAmount:number;          // contractedTenants × pricePerTenant, CONGELADO al contratar
+  status:"ACTIVA"|"VENCIDA"|"CANCELADA"|"CORTESIA";
+  currentPeriodStart:string;     // "YYYY-MM-DD"
+  currentPeriodEnd:string;       // "YYYY-MM-DD", último día cubierto (inclusive)
+  notes:string|null; createdAt:string; updatedAt:string;
+}
+
+SubscriptionPayment {
+  id:string; subscriptionId:string; landlordId:string;
+  billingPeriod:string;   // "YYYY-MM"
+  amount:number; paidAt:string;  // "YYYY-MM-DD"
+  recordedBy:string;      // email del admin que capturó el efectivo
+  notes:string|null; createdAt:string;
+}
+```
+
+Comportamiento que el UI debe reflejar:
+- **El escalón se deriva solo** de `contractedTenants` — no manden `planId` salvo un trato especial (25+).
+- **Un pago = un mes.** `POST .../payments` extiende `currentPeriodEnd` un mes y deja `ACTIVA`. Si ya estaba vencida, el mes nuevo arranca en `paidAt` (no cubre el hueco). No hay prorrateo ni pagos parciales.
+- `CORTESIA` = los 3 meses gratis de lanzamiento; opera igual que `ACTIVA` pero se distingue para no confundir cortesía con efectivo recibido.
+- `status` puede decir `ACTIVA` con la fecha ya pasada (el cron corre a la 1:00 UTC). **No calculen el bloqueo desde `status`** — usen `isOperational` del endpoint de abajo.
+
+**Un arrendador tiene UNA sola suscripción.** `POST /admin/subscriptions` sobre un arrendador que ya tiene plan **no da `409`: reemplaza la existente** (mismo registro, mismo `id`; queda auditado como `subscription.reassign`). El UI puede tener un solo formulario y llamarlo "Cambiar plan" cuando ya haya suscripción.
+
+**Defaults cuando se omite el campo** (para prellenar formularios):
+
+| Endpoint | Campo | Default |
+|---|---|---|
+| `POST /admin/subscriptions` | `startDate` | hoy (UTC) |
+| `POST /admin/subscriptions` | `months` | `1` — los 3 meses de cortesía se piden con `months: 3` |
+| `POST /admin/subscriptions` | `status` | `ACTIVA` (solo se acepta `ACTIVA` o `CORTESIA`; mandar `VENCIDA`/`CANCELADA` → `400`) |
+| `POST .../payments` | `paidAt` | hoy (UTC) |
+| `POST .../payments` | `amount` | `subscription.monthlyAmount` |
+| `POST .../payments` | `billingPeriod` | el mes de `paidAt` (`YYYY-MM`), **no** el mes de hoy — así un efectivo capturado con fecha retroactiva cae en su periodo real |
+
+**Bajar `contractedTenants` por debajo del uso actual está permitido.** `PATCH` no valida contra los inquilinos vivos: un arrendador con 9 inquilinos y el plan bajado a 5 queda en `9/5`. Los 9 **siguen operando** (no se da de baja a nadie ni se corta el servicio) pero el alta del siguiente inquilino responde `409` hasta que el uso baje del tope o el admin lo amplíe. El UI debería advertir al admin cuando el tope nuevo quede por debajo de `tenantsUsed`.
+
+**Tratos especiales (25+).** Se crea un plan nuevo con `POST /admin/plans` y se asigna mandando su `planId` explícito. **Créenlo con `isActive: false`**: un plan inactivo no participa en la derivación automática de escalón (que solo mira los activos) pero sí se puede asignar a mano por `planId`. Si lo crean activo y sin techo (`maxTenants: null`), competiría con el escalón "10 o más" y la derivación automática seguiría eligiendo el de 10+ (gana el de `minTenants` menor), no el especial.
+
+**`admin_audit_logs` no tiene endpoint de lectura.** Hoy es solo escritura (se consulta por SQL). **No lo prometan en pantalla**; si quieren una vista de bitácora, pídanlo por el canal de sync y se agrega.
+
+**Para "arrendadores sin plan"** (pantalla de asignación): no hay endpoint dedicado. Crucen `GET /landlords` (admin) contra `GET /admin/subscriptions` por `landlordId`. Si el volumen lo justifica, se puede agregar un filtro del lado backend — pídanlo por el canal.
+
+**Quitar el plan (`DELETE`) ≠ cancelarlo.** Sin suscripción **no se bloquea nada** (`hasSubscription: false`, `isOperational: true`, sin tope); con `status: CANCELADA` **sí** se bloquea. `DELETE` es para deshacer una asignación equivocada y responde `204`. Si la suscripción ya tiene efectivo capturado responde **`409`**: el historial de pagos cuelga de ella con `ON DELETE CASCADE` y borrarla se llevaría el registro del dinero recibido — en ese caso usen `PATCH status: CANCELADA`, que lo preserva.
+
+**No deriven el consumo desde `GET /landlords/admin/tenants`**: ese listado usa `withDeleted: true`, o sea que **incluye a los inquilinos dados de baja**, mientras que el tope solo cuenta a los vivos. Los dos números coinciden solo mientras nadie haya sido dado de baja. Usen `tenantsUsed` de `GET /admin/subscriptions` (panel de admin) o de `GET /landlords/:id/subscription` (banner del arrendador).
+
+⚠️ **`npm run seed` borra las suscripciones.** El seed hace `DELETE FROM landlords WHERE email = …` y la FK `landlord_subscriptions.landlord_id` es `ON DELETE CASCADE`, así que se lleva la suscripción y su historial de pagos; además el `landlordId` del demo **cambia de UUID**. Si su `global-setup.ts` de integración corre el seed, **asignen el plan después de sembrar**, nunca antes.
+
+#### Estado del plan del arrendador (`GET /landlords/:id/subscription`) — ✅ **backend listo, para el banner**
+
+**No es admin**: va con `OwnershipGuard`, cada arrendador ve solo el suyo (`403` con otro `:id`). Es **solo lectura** — el arrendador no contrata ni renueva desde el UI, porque el pago es efectivo.
+
+| Fn (`api.ts`) | Método | Ruta backend | Respuesta |
+|---|---|---|---|
+| *(sin fn aún)* | GET | `/landlords/:id/subscription` | `SubscriptionStatusView` |
+
+```ts
+SubscriptionStatusView {
+  hasSubscription:boolean;       // false = sin plan asignado
+  isOperational:boolean;         // ÚNICA fuente para decidir si mostrar el banner de bloqueo
+  status:"ACTIVA"|"VENCIDA"|"CANCELADA"|"CORTESIA"|null;
+  planName:string|null;
+  contractedTenants:number|null;
+  tenantsUsed:number;            // inquilinos vivos; para mostrar "3 de 7 inquilinos"
+  monthlyAmount:number|null;
+  currentPeriodEnd:string|null;  // "YYYY-MM-DD"
+  blockedReason:string|null;     // texto listo para mostrar; null si opera normal
+}
+```
+
+**Bloqueo suave** cuando `isOperational === false`: el bot deja de validar comprobantes (los recibe igual y quedan en `REVIEW` para aprobación manual, con su imagen guardada), no salen recordatorios (`POST /tenants/:id/reminder` → `400`) y no se timbran facturas (`POST /facturas` → `409`). **La lectura del dashboard sigue intacta**: no bloqueen navegación ni login, solo muestren el banner con `blockedReason`.
+
+**Tope de inquilinos:** `POST /properties/:id/tenants` responde **`409`** cuando ya se alcanzó `contractedTenants`, con `message` listo para mostrar (`"Tu plan cubre 3 inquilinos y ya tienes 3. Escríbenos para ampliarlo."`). Manejen ese 409 en el alta de inquilino. `POST /landlords/:id/properties` **no** tiene tope y nunca responde 409 por plan.
+
+Dar de baja a un inquilino libera su lugar (`tenantsUsed` baja), así que la rotación no consume plan.
+
+> **Un arrendador sin suscripción asignada NO se bloquea** (`hasSubscription: false`, `isOperational: true`, sin tope). Todas las cuentas actuales están así hasta que el admin les asigne plan.
 
 ---
 

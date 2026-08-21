@@ -6,7 +6,7 @@ test.describe("Recordatorios", () => {
     await mockBackend(page);
     await page.goto("/recordatorios");
 
-    // Carlos está "Pendiente" y sin recordatorio: botón habilitado.
+    // Carlos está "Vigente" y sin recordatorio: botón habilitado.
     const row = page.locator("div.grid", { hasText: "Carlos Ramírez Soto" });
     await expect(row.getByText("No enviado")).toBeVisible();
 
@@ -63,7 +63,7 @@ test.describe("Recordatorios", () => {
     await expect(autoSwitch).toBeChecked();
 
     const patch = page.waitForRequest(
-      (r) => r.method() === "PATCH" && /\/landlords\/\d+$/.test(new URL(r.url()).pathname.replace(/^\/api/, ""))
+      (r) => r.method() === "PATCH" && /\/landlords\/[^/]+$/.test(new URL(r.url()).pathname.replace(/^\/api/, ""))
     );
     await autoSwitch.click();
     const request = await patch;

@@ -17,8 +17,8 @@ import type {
  *   - `/api/**` (mismo origen, resuelto por el rewrite de next.config.ts)
  *   - `http://localhost:3001/**` (llamada directa al backend)
  *
- * Las rutas usan `\d+` para el landlordId, así que funcionan con cualquier
- * valor de NEXT_PUBLIC_LANDLORD_ID.
+ * Las rutas usan `[^/]+` para los IDs (UUID string, no numérico — ver
+ * rent-collector-sync.md 2026-08-05T00:10, "ruptura de contrato: IDs a UUID").
  */
 
 // ── Datos de prueba ───────────────────────────────────────────────────────────
@@ -45,7 +45,7 @@ export interface MockData {
 
 export function buildMockData(): MockData {
   const landlord: Landlord = {
-    id: 2,
+    id: "landlord-2",
     name: "Francisco Jiménez",
     email: "francisco@ejemplo.com",
     phone: "5215500000000",
@@ -66,16 +66,16 @@ export function buildMockData(): MockData {
   };
 
   const properties: Property[] = [
-    { id: 1, name: "Departamento 201", landlordId: landlord.id },
-    { id: 2, name: "Casa Roma Norte", landlordId: landlord.id },
+    { id: "property-1", name: "Departamento 201", landlordId: landlord.id },
+    { id: "property-2", name: "Casa Roma Norte", landlordId: landlord.id },
   ];
 
   const tenants: Tenant[] = [
     {
-      id: 1,
+      id: "tenant-1",
       name: "María López García",
       phone: "5215512345678",
-      propertyId: 1,
+      propertyId: "property-1",
       paymentDay: 5,
       monthlyAmount: 8500,
       paymentStatus: "Pagado",
@@ -83,24 +83,26 @@ export function buildMockData(): MockData {
       lastReminderAt: null,
     },
     {
-      id: 2,
+      id: "tenant-2",
       name: "Carlos Ramírez Soto",
       phone: "5215587654321",
-      propertyId: 1,
+      propertyId: "property-1",
       paymentDay: 10,
       monthlyAmount: 9500,
-      paymentStatus: "Pendiente",
+      paymentStatus: "Vigente",
       lastPaymentDate: null,
       lastReminderAt: null,
     },
     {
-      id: 3,
+      id: "tenant-3",
       name: "Ana Torres Vega",
       phone: "5215511122233",
-      propertyId: 2,
+      propertyId: "property-2",
       paymentDay: 1,
       monthlyAmount: 12000,
-      paymentStatus: "Vencido",
+      // Equivale al antiguo "Vencido": sin pago y con el plazo (día 1 + gracia)
+      // ya cumplido, pero el mes todavía corriendo.
+      paymentStatus: "Atrasado",
       lastPaymentDate: null,
       lastReminderAt: null,
     },
@@ -108,9 +110,9 @@ export function buildMockData(): MockData {
 
   const payments: PaymentAttempt[] = [
     {
-      id: 101,
+      id: "payment-101",
       tenantPhone: tenants[0].phone,
-      tenantId: 1,
+      tenantId: "tenant-1",
       status: "VERIFIED",
       source: "WHATSAPP",
       verifiedOnFirstTry: true,
@@ -121,9 +123,9 @@ export function buildMockData(): MockData {
       tenant: tenants[0],
     },
     {
-      id: 102,
+      id: "payment-102",
       tenantPhone: tenants[1].phone,
-      tenantId: 2,
+      tenantId: "tenant-2",
       status: "PENDING",
       source: "WHATSAPP",
       verifiedOnFirstTry: false,
@@ -132,9 +134,9 @@ export function buildMockData(): MockData {
       tenant: tenants[1],
     },
     {
-      id: 103,
+      id: "payment-103",
       tenantPhone: tenants[2].phone,
-      tenantId: 3,
+      tenantId: "tenant-3",
       status: "REJECTED",
       source: "WHATSAPP",
       verifiedOnFirstTry: false,
@@ -149,8 +151,8 @@ export function buildMockData(): MockData {
     {
       id: "fac-001",
       landlordId: landlord.id,
-      tenantId: 1,
-      paymentAttemptId: 101,
+      tenantId: "tenant-1",
+      paymentAttemptId: "payment-101",
       uuidCfdi: "A1B2C3D4-0000-0000-0000-000000000001",
       serie: "A",
       folio: "1",
@@ -170,7 +172,7 @@ export function buildMockData(): MockData {
     {
       id: "fac-002",
       landlordId: landlord.id,
-      tenantId: 2,
+      tenantId: "tenant-2",
       paymentAttemptId: null,
       uuidCfdi: null,
       serie: null,
@@ -197,21 +199,24 @@ export function buildMockData(): MockData {
 
 function buildReport(data: MockData): LandlordReport {
   const paid = data.tenants.filter((t) => t.paymentStatus === "Pagado");
-  const pending = data.tenants.filter((t) => t.paymentStatus === "Pendiente");
-  const overdue = data.tenants.filter((t) => t.paymentStatus === "Vencido");
+  const vigente = data.tenants.filter((t) => t.paymentStatus === "Vigente");
+  const atrasado = data.tenants.filter((t) => t.paymentStatus === "Atrasado");
+  const vencido = data.tenants.filter((t) => t.paymentStatus === "Vencido");
   const totalCobrado = paid.reduce((s, t) => s + Number(t.monthlyAmount ?? 0), 0);
 
   return {
     month: CURRENT_YM,
     summary: {
       totalCobrado,
-      totalPendiente: [...pending, ...overdue].reduce(
+      totalPendiente: [...vigente, ...atrasado, ...vencido].reduce(
         (s, t) => s + Number(t.monthlyAmount ?? 0),
         0
       ),
       cobradoCount: paid.length,
-      pendienteCount: pending.length,
-      vencidoCount: overdue.length,
+      vigenteCount: vigente.length,
+      pendienteCount: vigente.length, // alias deprecado, igual que el backend
+      atrasadoCount: atrasado.length,
+      vencidoCount: vencido.length,
       totalTenants: data.tenants.length,
       verifiedOnFirstTryCount: data.payments.filter((p) => p.verifiedOnFirstTry).length,
     },
@@ -223,7 +228,9 @@ function buildReport(data: MockData): LandlordReport {
         propertyName: p.name,
         totalCobrado: propPaid.reduce((s, t) => s + Number(t.monthlyAmount ?? 0), 0),
         cobradoCount: propPaid.length,
-        pendienteCount: propTenants.filter((t) => t.paymentStatus === "Pendiente").length,
+        vigenteCount: propTenants.filter((t) => t.paymentStatus === "Vigente").length,
+        pendienteCount: propTenants.filter((t) => t.paymentStatus === "Vigente").length,
+        atrasadoCount: propTenants.filter((t) => t.paymentStatus === "Atrasado").length,
         vencidoCount: propTenants.filter((t) => t.paymentStatus === "Vencido").length,
         totalTenants: propTenants.length,
         paidPercent: propTenants.length
@@ -240,7 +247,7 @@ function buildReport(data: MockData): LandlordReport {
         data.properties.find((p) => p.id === t.propertyId)?.name ?? "—",
       paymentDay: t.paymentDay ?? null,
       monthlyAmount: t.monthlyAmount ?? null,
-      paymentStatus: t.paymentStatus ?? "Pendiente",
+      paymentStatus: t.paymentStatus ?? "Vigente",
       lastVerifiedAt: t.lastPaymentDate ?? null,
       amountPaid: t.paymentStatus === "Pagado" ? Number(t.monthlyAmount ?? 0) : null,
       attemptsCount: data.payments.filter((p) => p.tenantPhone === t.phone).length,
@@ -272,10 +279,10 @@ export async function mockBackend(
   // Estado de sesión simulado: parte de `authenticated` (default true) y muta con
   // login/logout. `GET /me` responde según este flag.
   let authed = options.authenticated ?? true;
-  let nextPropertyId = Math.max(0, ...data.properties.map((p) => p.id)) + 1;
-  let nextTenantId = Math.max(0, ...data.tenants.map((t) => t.id)) + 1;
+  let nextPropertySeq = data.properties.length + 1;
+  let nextTenantSeq = data.tenants.length + 1;
   let nextFacturaSeq = data.facturas.length + 1;
-  let nextLandlordId = data.landlord.id + 1;
+  let nextLandlordSeq = 1000; // fuera del rango de los landlords fijos de arriba
   const registeredEmails = new Set<string>([data.landlord.email]);
 
   const handler = async (route: Route) => {
@@ -330,6 +337,16 @@ export async function mockBackend(
       return authed ? json(data.landlord) : json({ statusCode: 401, message: "Unauthorized" }, 401);
     }
 
+    // ── Forgot / Reset password (públicos) ──
+    if (method === "POST" && path === "/auth/forgot-password") {
+      return empty(); // 204 siempre — no revela si el correo existe
+    }
+    if (method === "POST" && path === "/auth/reset-password") {
+      const body = request.postDataJSON() as { token: string; password: string };
+      if (body.token === "valid-token") return empty();
+      return json({ message: "Token inválido o expirado" }, 400);
+    }
+
     // ── Register (autoregistro público) ──
     if (method === "POST" && path === "/landlords") {
       const body = request.postDataJSON() as { name: string; email: string; phone: string; password: string };
@@ -337,7 +354,7 @@ export async function mockBackend(
         return json({ statusCode: 409, message: "Email already exists" }, 409);
       }
       const newLandlord: Landlord = {
-        id: nextLandlordId++,
+        id: `landlord-${nextLandlordSeq++}`,
         name: body.name,
         email: body.email,
         phone: body.phone,
@@ -354,57 +371,57 @@ export async function mockBackend(
     }
 
     // ── Landlord ──
-    if (method === "GET" && /^\/landlords\/\d+$/.test(path)) return json(data.landlord);
-    if (method === "PATCH" && /^\/landlords\/\d+$/.test(path)) {
+    if (method === "GET" && /^\/landlords\/[^/]+$/.test(path)) return json(data.landlord);
+    if (method === "PATCH" && /^\/landlords\/[^/]+$/.test(path)) {
       Object.assign(data.landlord, request.postDataJSON());
       return json(data.landlord);
     }
-    if (method === "PATCH" && /^\/landlords\/\d+\/fiscal$/.test(path)) {
+    if (method === "PATCH" && /^\/landlords\/[^/]+\/fiscal$/.test(path)) {
       Object.assign(data.landlord, request.postDataJSON());
       return json(data.landlord);
     }
-    if (method === "GET" && /^\/landlords\/\d+\/report$/.test(path)) {
+    if (method === "GET" && /^\/landlords\/[^/]+\/report$/.test(path)) {
       return json(buildReport(data));
     }
 
     // ── Properties ──
-    if (method === "GET" && /^\/landlords\/\d+\/properties$/.test(path)) {
+    if (method === "GET" && /^\/landlords\/[^/]+\/properties$/.test(path)) {
       return json(data.properties);
     }
-    if (method === "POST" && /^\/landlords\/\d+\/properties$/.test(path)) {
+    if (method === "POST" && /^\/landlords\/[^/]+\/properties$/.test(path)) {
       const body = request.postDataJSON() as { name: string };
       const property: Property = {
-        id: nextPropertyId++,
+        id: `property-${nextPropertySeq++}`,
         name: body.name,
         landlordId: data.landlord.id,
       };
       data.properties.push(property);
       return json(property, 201);
     }
-    if (method === "PATCH" && (m = path.match(/^\/properties\/(\d+)$/))) {
-      const property = data.properties.find((p) => p.id === Number(m![1]));
+    if (method === "PATCH" && (m = path.match(/^\/properties\/([^/]+)$/))) {
+      const property = data.properties.find((p) => p.id === m![1]);
       if (!property) return json({ message: "Not found" }, 404);
       Object.assign(property, request.postDataJSON());
       return json(property);
     }
-    if (method === "DELETE" && (m = path.match(/^\/properties\/(\d+)$/))) {
-      data.properties = data.properties.filter((p) => p.id !== Number(m![1]));
+    if (method === "DELETE" && (m = path.match(/^\/properties\/([^/]+)$/))) {
+      data.properties = data.properties.filter((p) => p.id !== m![1]);
       return empty();
     }
 
     // ── Tenants ──
-    if (method === "GET" && /^\/landlords\/\d+\/tenants$/.test(path)) {
+    if (method === "GET" && /^\/landlords\/[^/]+\/tenants$/.test(path)) {
       return json(data.tenants);
     }
-    if (method === "GET" && (m = path.match(/^\/properties\/(\d+)\/tenants$/))) {
-      return json(data.tenants.filter((t) => t.propertyId === Number(m![1])));
+    if (method === "GET" && (m = path.match(/^\/properties\/([^/]+)\/tenants$/))) {
+      return json(data.tenants.filter((t) => t.propertyId === m![1]));
     }
-    if (method === "POST" && (m = path.match(/^\/properties\/(\d+)\/tenants$/))) {
+    if (method === "POST" && (m = path.match(/^\/properties\/([^/]+)\/tenants$/))) {
       const body = request.postDataJSON() as Partial<Tenant> & { name: string; phone: string };
       const tenant: Tenant = {
-        id: nextTenantId++,
-        propertyId: Number(m![1]),
-        paymentStatus: "Pendiente",
+        id: `tenant-${nextTenantSeq++}`,
+        propertyId: m![1],
+        paymentStatus: "Vigente",
         lastPaymentDate: null,
         lastReminderAt: null,
         ...body,
@@ -412,32 +429,32 @@ export async function mockBackend(
       data.tenants.push(tenant);
       return json(tenant, 201);
     }
-    if (method === "PATCH" && (m = path.match(/^\/properties\/tenants\/(\d+)$/))) {
-      const tenant = data.tenants.find((t) => t.id === Number(m![1]));
+    if (method === "PATCH" && (m = path.match(/^\/properties\/tenants\/([^/]+)$/))) {
+      const tenant = data.tenants.find((t) => t.id === m![1]);
       if (!tenant) return json({ message: "Not found" }, 404);
       Object.assign(tenant, request.postDataJSON());
       return json(tenant);
     }
-    if (method === "DELETE" && (m = path.match(/^\/properties\/tenants\/(\d+)$/))) {
-      data.tenants = data.tenants.filter((t) => t.id !== Number(m![1]));
+    if (method === "DELETE" && (m = path.match(/^\/properties\/tenants\/([^/]+)$/))) {
+      data.tenants = data.tenants.filter((t) => t.id !== m![1]);
       return empty();
     }
-    if (method === "PATCH" && (m = path.match(/^\/tenants\/(\d+)\/fiscal$/))) {
-      const tenant = data.tenants.find((t) => t.id === Number(m![1]));
+    if (method === "PATCH" && (m = path.match(/^\/tenants\/([^/]+)\/fiscal$/))) {
+      const tenant = data.tenants.find((t) => t.id === m![1]);
       if (!tenant) return json({ message: "Not found" }, 404);
       Object.assign(tenant, request.postDataJSON());
       return json(tenant);
     }
-    if (method === "POST" && (m = path.match(/^\/tenants\/(\d+)\/reminder$/))) {
-      const tenant = data.tenants.find((t) => t.id === Number(m![1]));
+    if (method === "POST" && (m = path.match(/^\/tenants\/([^/]+)\/reminder$/))) {
+      const tenant = data.tenants.find((t) => t.id === m![1]);
       if (!tenant) return json({ message: "Not found" }, 404);
       tenant.lastReminderAt = new Date().toISOString();
       return json({ sentAt: tenant.lastReminderAt });
     }
 
     // ── Balance del periodo ──
-    if (method === "GET" && (m = path.match(/^\/payments\/manual\/balance\/(\d+)$/))) {
-      const tenantId = Number(m![1]);
+    if (method === "GET" && (m = path.match(/^\/payments\/manual\/balance\/([^/]+)$/))) {
+      const tenantId = m![1];
       const period = url.searchParams.get("period") ?? CURRENT_YM;
       const tenant = data.tenants.find((t) => t.id === tenantId);
       const attempts = data.payments.filter(
@@ -458,13 +475,13 @@ export async function mockBackend(
 
     // ── Payments ──
     if (method === "GET" && path === "/payments") return json(data.payments);
-    if (method === "GET" && (m = path.match(/^\/payments\/(\d+)$/))) {
-      const payment = data.payments.find((p) => p.id === Number(m![1]));
+    if (method === "GET" && (m = path.match(/^\/payments\/([^/]+)$/))) {
+      const payment = data.payments.find((p) => p.id === m![1]);
       return payment ? json(payment) : json({ message: "Not found" }, 404);
     }
 
     // ── Facturas ──
-    if (method === "GET" && /^\/landlords\/\d+\/facturas$/.test(path)) {
+    if (method === "GET" && /^\/landlords\/[^/]+\/facturas$/.test(path)) {
       const period = url.searchParams.get("period");
       return json(
         period ? data.facturas.filter((f) => f.billingPeriod === period) : data.facturas
@@ -472,7 +489,7 @@ export async function mockBackend(
     }
     if (method === "POST" && path === "/facturas") {
       const body = request.postDataJSON() as {
-        tenantId: number;
+        tenantId: string;
         billingPeriod?: string;
         amount?: number;
         concepto?: string;

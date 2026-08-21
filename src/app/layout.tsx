@@ -10,7 +10,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "SAVE TIME by Shiftly — Rent Collector Dashboard",
-  description: "Dashboard para arrendadores — validación de pagos SPEI vía WhatsApp",
+  description: "Dashboard para arrendadores — cobranza de rentas y pagos vía WhatsApp",
 };
 
 export default function RootLayout({

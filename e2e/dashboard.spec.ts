@@ -29,7 +29,13 @@ test.describe("Dashboard", () => {
     for (const name of ["María López García", "Carlos Ramírez Soto", "Ana Torres Vega"]) {
       await expect(page.getByText(name).filter({ visible: true }).first()).toBeVisible();
     }
-    for (const status of ["Pagado", "Pendiente", "Vencido"]) {
+    // Escala de tres plazos desde 2026-08-16: el fixture tiene un Pagado (María),
+    // un Vigente (Carlos) y un Atrasado (Ana, antes "Vencido").
+    //
+    // Se afirma sobre las etiquetas de MovimientosBadge y no sobre los valores del
+    // enum: esta tabla usa la variante compacta, que renombra `Pagado` → "Cobrado"
+    // y `Vigente` → "En plazo".
+    for (const status of ["Cobrado", "En plazo", "⚠ Atrasado"]) {
       await expect(
         page.getByText(status, { exact: true }).filter({ visible: true }).first()
       ).toBeVisible();

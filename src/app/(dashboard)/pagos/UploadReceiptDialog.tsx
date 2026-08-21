@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, type ComponentProps } from "react";
-import { AlertCircle, CheckCircle2, ChevronDown, XCircle } from "lucide-react";
+import { useState } from "react";
+import { ScanLine, CheckCircle2, AlertCircle, XCircle, Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -9,23 +9,32 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { useStore } from "@/store/useStore";
 import * as api from "@/lib/api";
 import { cn, formatCurrency } from "@/lib/utils";
+import { fieldLabel } from "@/lib/field-labels";
 import type { PeriodBalance, ReceiptFields, ReceiptValidationResult } from "@/lib/types";
 
-// Labels en español para los campos de ReceiptFields (overrides y missingFields).
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+// Solo lo que este formulario dice distinto al catálogo compartido: en un input
+// conviene aclarar la moneda. El resto sale de @/lib/field-labels.
 const FIELD_LABELS: Record<string, string> = {
-  claveRastreo: "Clave de rastreo",
-  referencia: "Referencia",
   monto: "Monto (MXN)",
-  bancoEmisor: "Banco emisor",
-  bancoReceptor: "Banco receptor",
-  cuentaDestino: "Cuenta destino",
-  fecha: "Fecha de la operación",
-  billingPeriod: "Periodo (YYYY-MM)",
 };
 
-const fieldLabel = (f: string) => FIELD_LABELS[f] ?? f;
+const FIELD_ORDER = ["monto", "fecha", "billingPeriod", "claveRastreo", "bancoEmisor", "bancoReceptor", "cuentaDestino"];
 
-/** Convierte los valores capturados (strings) al shape de ReceiptFields. */
+// Maps named OcrData fields (typed) to ReceiptFields keys used in the completion form.
+function extractOcrToFields(data: import("@/lib/types").OcrData): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (data.monto != null)         out.monto         = String(data.monto);
+  if (data.fecha)                 out.fecha         = data.fecha;
+  if (data.bancoEmisor)           out.bancoEmisor   = data.bancoEmisor;
+  if (data.bancoReceptor)         out.bancoReceptor = data.bancoReceptor;
+  if (data.claveRastreo)          out.claveRastreo  = data.claveRastreo;
+  if (data.cuentaDestino)         out.cuentaDestino = data.cuentaDestino;
+  if (data.referencia)            out.referencia    = data.referencia;
+  return out;
+}
+
 function toReceiptFields(values: Record<string, string>): ReceiptFields {
   const fields: Record<string, string | number> = {};
   Object.entries(values).forEach(([key, value]) => {
@@ -51,232 +60,308 @@ function BalanceLine({ balance }: { balance: PeriodBalance }) {
   return <p className="text-[13px] text-emerald-700">Periodo {balance.period}: {formatCurrency(balance.paid)} abonados.</p>;
 }
 
+// ── Dialog ────────────────────────────────────────────────────────────────────
+
+type Phase = "idle" | "processing" | "review" | "complete" | "error";
+
 export function UploadReceiptDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { allTenants, fetchPayments, fetchAllTenants } = useStore();
 
+  const [phase, setPhase] = useState<Phase>("idle");
   const [tenantId, setTenantId] = useState("");
   const [file, setFile] = useState<File | null>(null);
-  const [showOverrides, setShowOverrides] = useState(false);
-  const [overrides, setOverrides] = useState<Record<string, string>>({});
-  const [missingValues, setMissingValues] = useState<Record<string, string>>({});
   const [result, setResult] = useState<ReceiptValidationResult | null>(null);
-  const [sending, setSending] = useState(false);
+  const [fields, setFields] = useState<Record<string, string>>({});
+  const [completing, setCompleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const reset = () => {
+    setPhase("idle");
     setTenantId("");
     setFile(null);
-    setShowOverrides(false);
-    setOverrides({});
-    setMissingValues({});
     setResult(null);
+    setFields({});
+    setCompleting(false);
     setError(null);
   };
 
   const handleClose = () => {
-    if (sending) return;
+    if (phase === "processing" || completing) return;
     reset();
     onClose();
   };
 
+  // Pre-llena `fields` con lo que el OCR extrajo del comprobante.
   const applyResult = async (r: ReceiptValidationResult) => {
     setResult(r);
-    setMissingValues({});
-    if (r.status === "VERIFIED" || r.status === "INTRABANK_OK") {
+
+    setFields("data" in r && r.data ? extractOcrToFields(r.data) : {});
+
+    if (r.status === "VERIFIED") {
       await Promise.all([fetchPayments(), fetchAllTenants()]);
+      setPhase("complete");
+    } else if (r.status === "INCOMPLETE") {
+      setPhase("review");
+    } else {
+      setPhase("error");
     }
   };
 
-  const handleUpload = async () => {
-    if (!tenantId || !file || sending) return;
-    setSending(true);
+  const runOcr = async (tid: string, f: File) => {
+    setPhase("processing");
     setError(null);
+    setResult(null);
+    setFields({});
     try {
-      const r = await api.uploadReceipt(parseInt(tenantId, 10), file, toReceiptFields(overrides));
+      const r = await api.uploadReceipt(tid, f);
       await applyResult(r);
     } catch (e) {
       setError((e as Error).message);
-    } finally {
-      setSending(false);
+      setPhase("error");
     }
+  };
+
+  const handleFileChange = (f: File) => {
+    setFile(f);
+    if (tenantId) runOcr(tenantId, f);
+  };
+
+  const handleTenantChange = (id: string | null) => {
+    if (!id) return;
+    setTenantId(id);
+    if (file) runOcr(id, file);
   };
 
   const handleComplete = async () => {
-    if (!result || result.status !== "INCOMPLETE" || sending) return;
-    setSending(true);
+    if (!result || result.status !== "INCOMPLETE" || completing) return;
+    setCompleting(true);
     setError(null);
     try {
-      const r = await api.completeReceiptValidation(result.attemptId, toReceiptFields(missingValues));
+      const r = await api.completeReceiptValidation(result.attemptId, toReceiptFields(fields));
       await applyResult(r);
     } catch (e) {
       setError((e as Error).message);
     } finally {
-      setSending(false);
+      setCompleting(false);
     }
   };
 
-  // Reintentar tras un rechazo o error técnico: vuelve al formulario inicial
-  // conservando inquilino y archivo seleccionados.
   const handleRetry = () => {
+    setFile(null);
     setResult(null);
+    setFields({});
     setError(null);
+    setPhase("idle");
   };
 
-  const setOverride = (key: string, value: string) =>
-    setOverrides((prev) => ({ ...prev, [key]: value }));
+  const missingFields = result?.status === "INCOMPLETE" ? result.missingFields : [];
+  const missingComplete = missingFields.length > 0 && missingFields.every(f => (fields[f] ?? "").trim() !== "");
 
-  const overrideInput = (key: string, props?: ComponentProps<typeof Input>) => (
-    <div key={key} className="space-y-1.5">
-      <label className="text-[13px] font-medium">{fieldLabel(key)}</label>
-      <Input value={overrides[key] ?? ""} onChange={(e) => setOverride(key, e.target.value)} {...props} />
-    </div>
-  );
+  const setField = (key: string, value: string) =>
+    setFields(prev => ({ ...prev, [key]: value }));
 
-  const isSuccess = result?.status === "VERIFIED" || result?.status === "INTRABANK_OK";
-  const isRejection = result?.status === "REJECTED" || result?.status === "INTRABANK_REJECTED" || result?.status === "ERROR";
-  const missingComplete =
-    result?.status === "INCOMPLETE" &&
-    result.missingFields.every((f) => (missingValues[f] ?? "").trim() !== "");
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-sm">
-        <DialogHeader><DialogTitle>Subir comprobante</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>Subir comprobante</DialogTitle>
+        </DialogHeader>
 
         <div className="overflow-y-auto flex-1 min-h-0 px-4 pb-2">
 
-          {/* ── Éxito: VERIFIED / INTRABANK_OK ── */}
-          {isSuccess && result && (result.status === "VERIFIED" || result.status === "INTRABANK_OK") && (
+          {/* ── OCR en proceso ── */}
+          {phase === "processing" && (
+            <div className="py-8 flex flex-col items-center gap-3 text-center">
+              <div className="w-14 h-14 rounded-full bg-[#eef1fd] flex items-center justify-center">
+                <Loader2 className="w-7 h-7 text-[#2952F3] animate-spin" />
+              </div>
+              <p className="text-[15px] font-semibold text-[#0B1426]">Analizando comprobante…</p>
+              <p className="text-[12px] text-slate-400 leading-relaxed max-w-[200px]">
+                El sistema extrae los datos con OCR y verifica el pago en Banxico
+              </p>
+            </div>
+          )}
+
+          {/* ── Verificado ── */}
+          {phase === "complete" && result?.status === "VERIFIED" && (
             <div className="py-2 space-y-3">
-              <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3 space-y-1.5">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 space-y-2">
                 <p className="flex items-center gap-2 text-[14px] font-semibold text-emerald-700">
-                  <CheckCircle2 className="w-4 h-4" /> Comprobante verificado
+                  <CheckCircle2 className="w-4 h-4 shrink-0" /> Comprobante verificado
                 </p>
                 {result.data.monto != null && (
                   <p className="text-[13px] text-emerald-700">
-                    Monto detectado: <span className="font-semibold">{formatCurrency(Number(result.data.monto))}</span>
+                    Monto: <span className="font-semibold tabular-nums">{formatCurrency(Number(result.data.monto))}</span>
                   </p>
                 )}
-                <BalanceLine balance={result.balance} />
+                {result.data.fecha && (
+                  <p className="text-[13px] text-emerald-700">Fecha: {result.data.fecha}</p>
+                )}
+                {result.data.bancoEmisor && (
+                  <p className="text-[13px] text-emerald-700">Banco: {result.data.bancoEmisor}</p>
+                )}
+                <div className="pt-1 border-t border-emerald-100">
+                  <BalanceLine balance={result.balance} />
+                </div>
               </div>
             </div>
           )}
 
-          {/* ── INCOMPLETE: pedir solo los campos faltantes ── */}
-          {result?.status === "INCOMPLETE" && (
-            <div className="py-2 space-y-4">
-              <p className="text-[13px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                El comprobante quedó pendiente: faltan datos para validarlo. Completa los campos y reenvía (no hace falta volver a subir el archivo).
-              </p>
-              {result.missingFields.map((f) => (
-                <div key={f} className="space-y-1.5">
-                  <label className="text-[13px] font-medium">{fieldLabel(f)}</label>
-                  <Input
-                    type={f === "monto" ? "number" : f === "fecha" ? "date" : f === "billingPeriod" ? "month" : "text"}
-                    value={missingValues[f] ?? ""}
-                    onChange={(e) => setMissingValues((prev) => ({ ...prev, [f]: e.target.value }))}
-                  />
-                </div>
-              ))}
+          {/* ── INCOMPLETE: campos extraídos pre-llenados + faltantes ── */}
+          {phase === "review" && result?.status === "INCOMPLETE" && (
+            <div className="py-2 space-y-3">
+              <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <p className="text-[12px] text-amber-700 leading-snug">
+                  OCR extrajo los datos del comprobante. Completa los campos marcados y confirma.
+                </p>
+              </div>
+              <div className="space-y-3">
+                {FIELD_ORDER.map(key => {
+                  const isMissing = missingFields.includes(key);
+                  const val = fields[key] ?? "";
+                  // Mostrar solo campos que OCR encontró o que son obligatorios
+                  if (!isMissing && !val) return null;
+                  return (
+                    <div key={key} className="space-y-1.5">
+                      <label className="text-[13px] font-medium flex items-center justify-between gap-2">
+                        <span>{fieldLabel(key, FIELD_LABELS)}</span>
+                        {isMissing && (
+                          <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-px shrink-0">
+                            Requerido
+                          </span>
+                        )}
+                      </label>
+                      <Input
+                        type={key === "monto" ? "number" : key === "fecha" ? "date" : key === "billingPeriod" ? "month" : "text"}
+                        value={val}
+                        onChange={e => setField(key, e.target.value)}
+                        className={cn(
+                          "h-9",
+                          isMissing && !val ? "border-amber-300 focus-visible:ring-amber-200" : ""
+                        )}
+                        placeholder={isMissing ? "Requerido" : undefined}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
               {error && (
-                <p className="text-[12px] text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
+                <p className="text-[12px] text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{error}</p>
               )}
             </div>
           )}
 
           {/* ── Rechazo / error técnico ── */}
-          {isRejection && result && "message" in result && (
+          {phase === "error" && (
             <div className="py-2 space-y-3">
-              <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 space-y-1.5">
+              <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 space-y-1.5">
                 <p className="flex items-center gap-2 text-[14px] font-semibold text-red-600">
-                  {result.status === "ERROR" ? <AlertCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
-                  {result.status === "ERROR" ? "No se pudo validar el comprobante" : "Comprobante rechazado"}
+                  {result?.status === "REJECTED"
+                    ? <XCircle className="w-4 h-4 shrink-0" />
+                    : <AlertCircle className="w-4 h-4 shrink-0" />}
+                  {result?.status === "REJECTED" ? "Comprobante rechazado" : "No se pudo procesar"}
                 </p>
-                <p className="text-[13px] text-red-600">{result.message}</p>
+                <p className="text-[13px] text-red-600">
+                  {result && "message" in result
+                    ? String(result.message)
+                    : error ?? "Error al procesar el comprobante."}
+                </p>
               </div>
             </div>
           )}
 
           {/* ── Formulario inicial ── */}
-          {!result && (
+          {phase === "idle" && (
             <div className="space-y-4 py-2">
               <div className="space-y-1.5">
-                <label className="text-sm font-medium">Inquilino</label>
-                <Select value={tenantId} onValueChange={(v) => setTenantId(v ?? "")}>
+                <label className="text-[13px] font-medium text-[#0B1426]">Inquilino</label>
+                <Select value={tenantId} onValueChange={handleTenantChange}>
                   <SelectTrigger><SelectValue placeholder="Seleccionar inquilino" /></SelectTrigger>
                   <SelectContent>
-                    {allTenants.map((t) => (
+                    {allTenants.map(t => (
                       <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
+
               <div className="space-y-1.5">
-                <label className="text-sm font-medium">Comprobante (imagen o PDF)</label>
-                <Input
+                <label className="text-[13px] font-medium text-[#0B1426]">Comprobante</label>
+                <label
+                  htmlFor="receipt-file"
+                  className={cn(
+                    "flex flex-col items-center justify-center gap-2.5 border-2 border-dashed rounded-xl px-4 py-7 cursor-pointer transition-colors select-none",
+                    file
+                      ? "border-[#2952F3]/50 bg-[#eef1fd]/60"
+                      : "border-slate-200 hover:border-[#2952F3]/40 hover:bg-[#eef1fd]/30"
+                  )}
+                >
+                  {file ? (
+                    <>
+                      <ScanLine className="w-5 h-5 text-[#2952F3]" />
+                      <span className="text-[13px] text-[#2952F3] font-medium text-center break-all leading-tight">
+                        {file.name}
+                      </span>
+                      {!tenantId && (
+                        <span className="text-[12px] text-slate-400">Selecciona el inquilino para analizar</span>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-5 h-5 text-slate-400" />
+                      <span className="text-[13px] text-slate-600 font-medium">Seleccionar imagen o PDF</span>
+                      <span className="text-[12px] text-slate-400">
+                        El OCR extrae los datos automáticamente
+                      </span>
+                    </>
+                  )}
+                </label>
+                <input
+                  id="receipt-file"
                   type="file"
                   accept="image/*,.pdf"
-                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                  className="sr-only"
+                  onChange={e => {
+                    const f = e.target.files?.[0];
+                    if (f) handleFileChange(f);
+                  }}
                 />
               </div>
-
-              {/* Sección colapsable de overrides del OCR */}
-              <div className="border border-slate-200 rounded-lg overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setShowOverrides((s) => !s)}
-                  className="w-full flex items-center justify-between px-3 py-2 text-[13px] font-medium text-slate-600 bg-slate-50 hover:bg-slate-100 transition-colors"
-                >
-                  Datos del comprobante (opcional)
-                  <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform", showOverrides && "rotate-180")} />
-                </button>
-                {showOverrides && (
-                  <div className="p-3 space-y-3">
-                    <p className="text-[12px] text-slate-400">
-                      Si los capturas, estos datos sobreescriben lo que detecte el OCR.
-                    </p>
-                    {overrideInput("claveRastreo", { placeholder: "Ej. MBAN01002505..." })}
-                    {overrideInput("monto", { type: "number", min: "0", step: "0.01", placeholder: "0.00" })}
-                    {overrideInput("bancoEmisor", { placeholder: "Ej. BBVA" })}
-                    {overrideInput("fecha", { type: "date" })}
-                    {overrideInput("billingPeriod", { type: "month" })}
-                  </div>
-                )}
-              </div>
-
-              {error && (
-                <p className="text-[12px] text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
-              )}
             </div>
           )}
 
         </div>
 
         <DialogFooter>
-          {isSuccess && (
+          {phase === "complete" && (
             <Button onClick={handleClose} className="bg-[#2952F3] hover:bg-[#1e3fd4]">Cerrar</Button>
           )}
-          {result?.status === "INCOMPLETE" && (
+          {phase === "review" && (
             <>
-              <Button variant="outline" onClick={handleClose} disabled={sending}>Cerrar</Button>
-              <Button onClick={handleComplete} disabled={!missingComplete || sending} className="bg-[#2952F3] hover:bg-[#1e3fd4]">
-                {sending ? "Validando..." : "Reenviar datos"}
+              <Button variant="outline" onClick={handleClose} disabled={completing}>Cerrar</Button>
+              <Button
+                onClick={handleComplete}
+                disabled={!missingComplete || completing}
+                className="bg-[#2952F3] hover:bg-[#1e3fd4]"
+              >
+                {completing ? "Validando…" : "Confirmar datos"}
               </Button>
             </>
           )}
-          {isRejection && (
+          {phase === "error" && (
             <>
               <Button variant="outline" onClick={handleClose}>Cerrar</Button>
               <Button onClick={handleRetry} className="bg-[#2952F3] hover:bg-[#1e3fd4]">Reintentar</Button>
             </>
           )}
-          {!result && (
-            <>
-              <Button variant="outline" onClick={handleClose} disabled={sending}>Cancelar</Button>
-              <Button onClick={handleUpload} disabled={!tenantId || !file || sending} className="bg-[#2952F3] hover:bg-[#1e3fd4]">
-                {sending ? "Validando..." : "Subir y validar"}
-              </Button>
-            </>
+          {phase === "idle" && (
+            <Button variant="outline" onClick={handleClose}>Cancelar</Button>
+          )}
+          {phase === "processing" && (
+            <Button variant="outline" disabled>Cancelar</Button>
           )}
         </DialogFooter>
       </DialogContent>

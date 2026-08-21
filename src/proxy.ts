@@ -21,6 +21,6 @@ export function proxy(req: NextRequest) {
 }
 
 export const config = {
-  // Protege todo salvo /login, el BFF (/api/*, con su propia auth) y los estáticos.
-  matcher: ["/((?!login|registro|api|_next/static|_next/image|favicon.ico).*)"],
+  // Protege todo salvo las rutas públicas de auth, el BFF (/api/*) y los estáticos.
+  matcher: ["/((?!login|registro|recuperar-contrasena|nueva-contrasena|api|_next/static|_next/image|favicon.ico|save-time-logo).*)"],
 };

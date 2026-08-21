@@ -5,6 +5,7 @@ import { UserCog, LogIn, CheckCircle2, XCircle } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import * as api from "@/lib/api";
+import { apiError } from "@/lib/api-error";
 import type { Landlord } from "@/lib/types";
 import { useStore } from "@/store/useStore";
 
@@ -31,7 +32,7 @@ function ImpersonateButton({ landlord }: { landlord: Landlord }) {
       setDone(true);
       if (typeof window !== "undefined") window.location.href = "/dashboard";
     } catch (e) {
-      setError((e as Error).message);
+      setError(apiError(e, "No se pudo iniciar la sesión de impersonación."));
       setLoading(false);
     }
   };

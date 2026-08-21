@@ -26,6 +26,39 @@ function cookieOpts(maxAge: number) {
   };
 }
 
+/**
+ * Lee el `accessToken` de una respuesta de auth (`login`, `impersonate`), que son
+ * los dos únicos casos en los que el BFF necesita interpretar el body en vez de
+ * reenviarlo tal cual. Devuelve el dato, o `null` si la respuesta no es lo que
+ * decimos esperar.
+ *
+ * El 2xx-que-no-es-JSON no es un caso teórico: con `BACKEND_URL` apuntando al
+ * propio Next, `POST /auth/login` terminaba redirigido a la página `/login` y
+ * `res.json()` reventaba sobre el `<!DOCTYPE html>`. La ruta devolvía un 500 con
+ * stack trace en vez de decir que la configuración estaba mal.
+ */
+async function readAuthBody(
+  res: Response
+): Promise<{ accessToken: string; landlord: unknown } | null> {
+  if (!res.headers.get("content-type")?.includes("application/json")) return null;
+  try {
+    const data = (await res.json()) as { accessToken?: unknown; landlord?: unknown };
+    if (typeof data.accessToken !== "string" || !data.accessToken) return null;
+    return { accessToken: data.accessToken, landlord: data.landlord };
+  } catch {
+    // Content-type miente o el JSON viene truncado.
+    return null;
+  }
+}
+
+/** El backend contestó, pero con algo que no podemos usar. */
+function badGateway() {
+  return NextResponse.json(
+    { message: "Respuesta inesperada del backend. Revisa BACKEND_URL." },
+    { status: 502 }
+  );
+}
+
 async function forward(req: NextRequest, path: string): Promise<Response> {
   const token = (await cookies()).get(TOKEN_COOKIE)?.value;
   const url = `${BACKEND_URL}/${path}${req.nextUrl.search}`;
@@ -71,17 +104,21 @@ async function handle(
         method: "POST",
         headers: { "content-type": "application/json" },
         body: await req.arrayBuffer(),
+        // Como en `forward()`: una redirección del backend se reporta, no se sigue.
+        redirect: "manual",
       });
     } catch {
       return NextResponse.json({ message: "Backend no disponible" }, { status: 503 });
     }
     if (!res.ok) {
+      if (res.status >= 300 && res.status < 400) return badGateway();
       return new NextResponse(res.body, {
         status: res.status,
         headers: { "content-type": res.headers.get("content-type") ?? "application/json" },
       });
     }
-    const data = (await res.json()) as { accessToken: string; landlord: unknown };
+    const data = await readAuthBody(res);
+    if (!data) return badGateway();
     const out = NextResponse.json({ landlord: data.landlord });
     out.cookies.set(TOKEN_COOKIE, data.accessToken, cookieOpts(COOKIE_MAX_AGE));
     return out;
@@ -109,23 +146,37 @@ async function handle(
 
   // ── Impersonate: guarda el token del admin en rc_admin_session, reemplaza
   //    rc_token con el de impersonación (2h). El accessToken nunca llega al JS. ──
-  if (req.method === "POST" && /^auth\/impersonate\/\d+$/.test(path)) {
+  //
+  //    El patrón NO valida el formato del id a propósito: cuando eran numéricos
+  //    esto era `\d+`, y al migrar a UUID dejó de coincidir — la petición caía a
+  //    `forward()`, que devuelve el body del backend tal cual y filtraba el
+  //    accessToken al JS del cliente (justo lo que este BFF existe para evitar).
+  //    `auth/impersonate/end` ya se atendió arriba, así que aquí basta con exigir
+  //    que sea un único segmento. Quién puede impersonar lo decide el backend.
+  if (req.method === "POST" && /^auth\/impersonate\/[^/]+$/.test(path)) {
     const adminToken = (await cookies()).get(TOKEN_COOKIE)?.value;
     const impHeaders: Record<string, string> = { "content-type": "application/json" };
     if (adminToken) impHeaders["authorization"] = `Bearer ${adminToken}`;
     let res: Response;
     try {
-      res = await fetch(`${BACKEND_URL}/${path}`, { method: "POST", headers: impHeaders });
+      res = await fetch(`${BACKEND_URL}/${path}`, {
+        method: "POST",
+        headers: impHeaders,
+        redirect: "manual",
+      });
     } catch {
       return NextResponse.json({ message: "Backend no disponible" }, { status: 503 });
     }
     if (!res.ok) {
+      if (res.status >= 300 && res.status < 400) return badGateway();
       return new NextResponse(res.body, {
         status: res.status,
         headers: { "content-type": res.headers.get("content-type") ?? "application/json" },
       });
     }
-    const data = (await res.json()) as { accessToken: string; landlord: unknown };
+    const data = await readAuthBody(res);
+    // Sin token válido no se toca `rc_token`: la sesión del admin queda intacta.
+    if (!data) return badGateway();
     const out = NextResponse.json({ landlord: data.landlord });
     // Preserva el token del admin para poder volver sin re-login.
     if (adminToken) out.cookies.set(ADMIN_SESSION_COOKIE, adminToken, cookieOpts(COOKIE_MAX_AGE));

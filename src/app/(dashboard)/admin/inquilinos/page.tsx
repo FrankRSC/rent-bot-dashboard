@@ -5,15 +5,16 @@ import { Users, Search } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import * as api from "@/lib/api";
-import type { AdminTenant } from "@/lib/types";
+import type { AdminTenant, PaymentStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const STATUS_STYLE: Record<string, string> = {
+const STATUS_STYLE: Record<PaymentStatus, string> = {
   Pagado: "bg-emerald-50 text-emerald-700",
-  Parcial: "bg-amber-50 text-amber-700",
-  Pendiente: "bg-slate-100 text-slate-600",
+  Parcial: "bg-sky-50 text-sky-700",
+  Vigente: "bg-slate-100 text-slate-600",
+  Atrasado: "bg-amber-50 text-amber-700",
   Vencido: "bg-red-50 text-red-700",
   "Revisión": "bg-violet-50 text-violet-700",
 };

@@ -13,6 +13,7 @@ import * as api from "@/lib/api";
 import type { PaymentAttempt, PeriodBalance, EventType, ManualPaymentMethod } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { AttemptStatusBadge } from "@/components/ui/StatusBadge";
+import { fieldLabel } from "@/lib/field-labels";
 
 type EventMeta = { icon: React.ElementType; color: string; label: string };
 
@@ -24,11 +25,10 @@ function getEventMeta(event: EventType): EventMeta {
     OCR_FAILED:         { icon: AlertCircle, color: "text-red-600 bg-red-50",        label: "Error al leer comprobante" },
     FIELD_REQUESTED:    { icon: HelpCircle,  color: "text-amber-600 bg-amber-50",    label: "Dato solicitado al inquilino" },
     FIELD_PROVIDED:     { icon: Check,       color: "text-amber-700 bg-amber-50",    label: "Dato proporcionado" },
-    CEP_CALLED:         { icon: Globe,       color: "text-purple-600 bg-purple-50",  label: "Verificación con Banxico" },
+    CEP_CALLED:         { icon: Globe,       color: "text-purple-600 bg-purple-50",  label: "Verificación automática" },
+    CEP_GEMINI_RETRY:   { icon: Globe,       color: "text-purple-600 bg-purple-50",  label: "Reintento de verificación" },
     VERIFIED:           { icon: ShieldCheck, color: "text-[#047857] bg-[#ecfdf5]",   label: "Verificado ✓" },
     REJECTED:           { icon: ShieldX,     color: "text-purple-600 bg-purple-50",  label: "Revisión" },
-    INTRABANK_OK:       { icon: ShieldCheck, color: "text-[#047857] bg-[#ecfdf5]",   label: "Intrabancario OK ✓" },
-    INTRABANK_REJECTED: { icon: ShieldX,     color: "text-red-600 bg-red-50",        label: "Intrabancario Fallido" },
     ERROR:              { icon: AlertCircle, color: "text-red-600 bg-red-50",        label: "Error" },
     MANUAL_REGISTERED:  { icon: HandCoins,   color: "text-[#2952F3] bg-[#eef1fd]",   label: "Pago registrado a mano" },
     RECEIPT_UPLOADED:   { icon: Upload,      color: "text-blue-600 bg-blue-50",      label: "Comprobante subido desde el panel" },
@@ -37,40 +37,10 @@ function getEventMeta(event: EventType): EventMeta {
   return map[event] ?? { icon: Clock, color: "text-slate-400 bg-slate-100", label: event };
 }
 
-const KEY_LABELS: Record<string, string> = {
-  // OCR / CEP
-  monto:              "Monto",
-  claveRastreo:       "Clave de rastreo",
-  referencia:         "Referencia",
-  bancoEmisor:        "Banco emisor",
-  bancoReceptor:      "Banco receptor",
-  cuentaDestino:      "Cuenta destino",
-  fecha:              "Fecha de operación",
-  nombreBeneficiario: "Beneficiario",
-  nombreOrdenante:    "Ordenante",
-  concepto:           "Concepto",
-  estadoOperacion:    "Estado",
-  emisorNombre:       "Emisor",
-  receptorNombre:     "Receptor",
-  fechaOperacion:     "Fecha operación",
-  sello:              "Sello digital",
-  ocrMonto:           "Monto leído",
-  cepMonto:           "Monto verificado",
-  // Eventos / revisión
-  reason:             "Motivo",
-  field:              "Campo",
-  value:              "Valor",
-  status:             "Estado",
-  error:              "Error",
-  // Pago manual (campos en ev.data de MANUAL_REGISTERED)
-  amount:             "Monto",
-  paymentDate:        "Fecha de pago",
-  billingPeriod:      "Periodo",
-  paymentMethod:      "Método de pago",
-  note:               "Nota",
-  source:             "Origen",
-  tenantId:           "Inquilino",
-};
+
+// Detalles internos/de diagnóstico sin valor para el arrendador — nunca se muestran,
+// ni con etiqueta traducida (ej. "Método de OCR: OCR_SPACE" no le dice nada a nadie).
+const HIDDEN_KEYS = new Set(["methodUsed", "mediaId", "messageId", "size", "verifiedOnFirstTry"]);
 
 function isPrimitive(v: unknown): v is string | number | boolean {
   return v !== null && v !== undefined && v !== "" && typeof v !== "object";
@@ -84,19 +54,30 @@ function formatEventValue(key: string, value: string | number | boolean): string
   if (key === "paymentMethod" && typeof value === "string")
     return METHOD_LABELS[value as ManualPaymentMethod] ?? value;
   if (key === "field" && typeof value === "string")
-    return KEY_LABELS[value] ?? value;
+    return fieldLabel(value);
+  if (key === "isIntrabancario")
+    return value ? "Mismo banco" : "Entre bancos distintos";
+  // `expected`/`provided` llegan como dígitos crudos sin enmascarar (a diferencia de `account`,
+  // que ya viene "****XXXX") — se antepone **** para que se vea consistente en la UI
+  // (confirmado con el backend, rent-collector-sync.md 2026-08-05T02:15).
+  if ((key === "expected" || key === "provided") && typeof value === "string" && !value.startsWith("*"))
+    return `****${value}`;
   return String(value);
 }
 
 function DataSection({ data }: { data: Record<string, unknown> }) {
-  const entries = Object.entries(data).filter(([, v]) => isPrimitive(v));
+  const entries = Object.entries(data).filter(
+    ([key, v]) => isPrimitive(v) && !HIDDEN_KEYS.has(key)
+  );
   if (!entries.length) return null;
   return (
     <div className="divide-y divide-slate-100 rounded-xl border border-slate-200/80 overflow-hidden">
       {entries.map(([key, value]) => (
         <div key={key} className="flex items-start gap-3 px-4 py-2.5 bg-white">
-          <span className="text-[12px] text-slate-400 min-w-[140px] shrink-0">{KEY_LABELS[key] ?? key}</span>
-          <span className="text-[13px] font-medium text-[#0B1426] break-all">{String(value)}</span>
+          <span className="text-[12px] text-slate-400 min-w-[140px] shrink-0">{fieldLabel(key)}</span>
+          <span className="text-[13px] font-medium text-[#0B1426] break-all">
+            {formatEventValue(key, value as string | number | boolean)}
+          </span>
         </div>
       ))}
     </div>
@@ -117,7 +98,7 @@ const formatMoney = (n: number) =>
 const formatDay = (isoDay: string) =>
   format(new Date(`${isoDay}T00:00:00`), "dd 'de' MMMM yyyy", { locale: es });
 
-function ImageViewer({ attemptId }: { attemptId: number }) {
+function ImageViewer({ attemptId }: { attemptId: string }) {
   const [open, setOpen] = useState(false);
   const [src, setSrc] = useState<string | null>(null);
   const [mimeType, setMimeType] = useState<string | null>(null);
@@ -289,7 +270,7 @@ function ReviewDialog({
 
 export default function PaymentDetailPage() {
   const params = useParams();
-  const id = parseInt(params.id as string, 10);
+  const id = params.id as string;
   const [attempt, setAttempt] = useState<PaymentAttempt | null>(null);
   const [balance, setBalance] = useState<PeriodBalance | null>(null);
   const [loading, setLoading] = useState(true);
@@ -297,17 +278,16 @@ export default function PaymentDetailPage() {
   const [reviewAction, setReviewAction] = useState<"APPROVE" | "REJECT" | null>(null);
 
   useEffect(() => {
-    if (isNaN(id)) return;
+    if (!id) return;
     api.getPaymentById(id)
       .then(setAttempt)
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
   }, [id]);
 
-  // Para intentos PARTIAL obtenemos el balance del periodo: muestra cuánto va
-  // acumulado del total esperado, incluyendo abonos del bot y manuales.
+  // Para PARTIAL y MANUAL_VERIFIED obtenemos el balance del periodo.
   useEffect(() => {
-    if (!attempt || attempt.status !== "PARTIAL" || !attempt.tenantId) return;
+    if (!attempt || (attempt.status !== "PARTIAL" && attempt.status !== "MANUAL_VERIFIED") || !attempt.tenantId) return;
     const period =
       attempt.billingPeriod ??
       `${new Date(attempt.createdAt).getFullYear()}-${String(new Date(attempt.createdAt).getMonth() + 1).padStart(2, "0")}`;
@@ -353,7 +333,8 @@ export default function PaymentDetailPage() {
   }
 
   const events = attempt.events ?? [];
-  const isVerified = attempt.status === "VERIFIED" || attempt.status === "INTRABANK_OK" || attempt.status === "MANUAL_VERIFIED";
+  const isVerified = attempt.status === "VERIFIED" || attempt.status === "MANUAL_VERIFIED";
+  const isPartialManual = attempt.status === "MANUAL_VERIFIED" && balance != null && (balance.remaining ?? 0) > 0;
 
   // Acciones de revisión (override del arrendador, docs/CONTRATOS_API.md §2.7)
   const canApprove = !isVerified;
@@ -388,7 +369,10 @@ export default function PaymentDetailPage() {
               <p className="text-[11px] text-slate-400 uppercase tracking-widest font-semibold mb-1">Intento de pago</p>
               <div className="flex items-center gap-2.5 flex-wrap">
                 <h1 className="text-[22px] font-bold text-[#0B1426] leading-tight">#{attempt.id}</h1>
-                <AttemptStatusBadge status={attempt.status} />
+                {isPartialManual
+                  ? <span className="inline-flex items-center border text-[11px] font-semibold px-2.5 py-[3px] rounded-full whitespace-nowrap bg-amber-100 border-amber-300 text-amber-700">Abono (manual)</span>
+                  : <AttemptStatusBadge status={attempt.status} />
+                }
                 {attempt.verifiedOnFirstTry && (
                   <span className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-semibold px-2.5 py-[3px] rounded-full">
                     <ShieldCheck className="w-3 h-3" /> Verificado a la primera
@@ -436,8 +420,8 @@ export default function PaymentDetailPage() {
         </div>
       </div>
 
-      {/* Balance del periodo — solo para intentos PARTIAL */}
-      {attempt.status === "PARTIAL" && balance && (
+      {/* Balance del periodo — PARTIAL y MANUAL_VERIFIED parcial */}
+      {(attempt.status === "PARTIAL" || isPartialManual) && balance && (
         <div
           className="bg-white rounded-2xl border border-slate-200/80 p-5"
           style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
@@ -505,96 +489,109 @@ export default function PaymentDetailPage() {
         </div>
       )}
 
-      {/* OCR + CEP */}
-      {(attempt.ocrData || attempt.cepResponse) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {attempt.ocrData && (
-            <div
-              className="bg-white rounded-2xl border border-slate-200/80 p-5"
-              style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
-            >
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-7 h-7 rounded-lg bg-[#eef1fd] flex items-center justify-center shrink-0">
-                  <ScanLine className="w-3.5 h-3.5 text-[#2952F3]" />
+      {/* Datos del comprobante + línea de tiempo en dos columnas */}
+      <div className={cn(
+        "grid gap-4 items-start",
+        (attempt.ocrData || attempt.cepResponse) ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-1"
+      )}>
+        {/* Columna izquierda: OCR + CEP apilados */}
+        {(attempt.ocrData || attempt.cepResponse) && (
+          <div className="space-y-4">
+            {attempt.ocrData && (
+              <div
+                className="bg-white rounded-2xl border border-slate-200/80 p-5"
+                style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
+              >
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-7 h-7 rounded-lg bg-[#eef1fd] flex items-center justify-center shrink-0">
+                    <ScanLine className="w-3.5 h-3.5 text-[#2952F3]" />
+                  </div>
+                  <p className="text-[13px] font-semibold text-[#0B1426]">Datos del comprobante</p>
                 </div>
-                <p className="text-[13px] font-semibold text-[#0B1426]">Datos del comprobante</p>
+                <DataSection data={attempt.ocrData} />
               </div>
-              <DataSection data={attempt.ocrData} />
-            </div>
-          )}
-          {attempt.cepResponse && (
-            <div
-              className="bg-white rounded-2xl border border-slate-200/80 p-5"
-              style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
-            >
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-7 h-7 rounded-lg bg-[#ecfdf5] flex items-center justify-center shrink-0">
-                  <ShieldCheck className="w-3.5 h-3.5 text-[#047857]" />
+            )}
+            {attempt.cepResponse && (
+              <div
+                className="bg-white rounded-2xl border border-slate-200/80 p-5"
+                style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
+              >
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-7 h-7 rounded-lg bg-[#ecfdf5] flex items-center justify-center shrink-0">
+                    <ShieldCheck className="w-3.5 h-3.5 text-[#047857]" />
+                  </div>
+                  <p className="text-[13px] font-semibold text-[#0B1426]">Verificación de transferencia</p>
                 </div>
-                <p className="text-[13px] font-semibold text-[#0B1426]">Verificación Banxico</p>
+                <DataSection data={attempt.cepResponse} />
               </div>
-              <DataSection data={attempt.cepResponse} />
-            </div>
-          )}
-        </div>
-      )}
+            )}
+          </div>
+        )}
 
-      {/* Timeline */}
-      <div
-        className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden"
-        style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
-      >
-        <div className="px-4 sm:px-6 py-4 border-b border-slate-100">
-          <p className="text-[14px] font-semibold text-[#0B1426]">Línea de tiempo</p>
-          <p className="text-[12px] text-slate-400 mt-0.5">{events.length} evento{events.length !== 1 ? "s" : ""} registrado{events.length !== 1 ? "s" : ""}</p>
-        </div>
-
-        <div className="p-4 sm:p-6">
-          {events.length === 0 ? (
-            <p className="text-[13px] text-slate-400 text-center py-4">Sin eventos registrados</p>
-          ) : (
-            <div className="relative">
-              <div className="absolute left-5 top-5 bottom-5 w-px bg-slate-100" />
-              <div className="space-y-1">
-                {events.map((ev, i) => {
-                  const meta = getEventMeta(ev.event);
-                  const Icon = meta.icon;
-                  const isLast = i === events.length - 1;
-                  return (
-                    <div key={ev.id} className="relative flex gap-4">
-                      <div className={cn("relative z-10 flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center", meta.color)}>
-                        <Icon className="w-4 h-4" />
-                      </div>
-                      <div className={cn("flex-1 pb-4", isLast && "pb-0")}>
-                        <div className="flex items-center justify-between gap-2 pt-2.5">
-                          <span className="text-[13px] font-semibold text-[#0B1426]">{meta.label}</span>
-                          <span className="text-[11px] text-slate-400 tabular-nums shrink-0 font-mono">
-                            {format(new Date(ev.createdAt), "HH:mm:ss")}
-                          </span>
+        {/* Columna derecha: línea de tiempo */}
+        <div
+          className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden"
+          style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
+        >
+          <div className="px-4 sm:px-6 py-4 border-b border-slate-100">
+            <p className="text-[14px] font-semibold text-[#0B1426]">Línea de tiempo</p>
+            <p className="text-[12px] text-slate-400 mt-0.5">{events.length} evento{events.length !== 1 ? "s" : ""} registrado{events.length !== 1 ? "s" : ""}</p>
+          </div>
+          <div className="p-4 sm:p-6">
+            {events.length === 0 ? (
+              <p className="text-[13px] text-slate-400 text-center py-4">Sin eventos registrados</p>
+            ) : (
+              <div className="relative">
+                <div className="absolute left-5 top-5 bottom-5 w-px bg-slate-100" />
+                <div className="space-y-1">
+                  {events.map((ev, i) => {
+                    const meta = getEventMeta(ev.event);
+                    const Icon = meta.icon;
+                    const isLast = i === events.length - 1;
+                    return (
+                      <div key={ev.id} className="relative flex gap-4">
+                        <div className={cn("relative z-10 flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center", meta.color)}>
+                          <Icon className="w-4 h-4" />
                         </div>
-                        {ev.event === "MEDIA_RECEIVED" && (
-                          attempt.imageMediaId
-                            ? <ImageViewer attemptId={attempt.id} />
-                            : <p className="mt-1.5 text-[11px] text-slate-400">Imagen no disponible (pago de prueba)</p>
-                        )}
-                        {ev.data && Object.keys(ev.data).length > 0 && (
-                          <div className="mt-1.5 flex flex-wrap gap-1.5">
-                            {Object.entries(ev.data)
-                              .filter(([, v]) => isPrimitive(v))
-                              .map(([key, value]) => (
-                                <span key={key} className="inline-flex items-center gap-1 text-[11px] bg-slate-100 text-slate-600 rounded-md px-2 py-0.5">
-                                  <span className="text-slate-400">{KEY_LABELS[key] ?? key}:</span> {formatEventValue(key, value as string | number | boolean)}
-                                </span>
-                              ))}
+                        <div className={cn("flex-1 pb-4", isLast && "pb-0")}>
+                          <div className="flex items-center justify-between gap-2 pt-2.5">
+                            <span className="text-[13px] font-semibold text-[#0B1426]">{meta.label}</span>
+                            <span className="text-[11px] text-slate-400 tabular-nums shrink-0 font-mono">
+                              {format(new Date(ev.createdAt), "HH:mm:ss")}
+                            </span>
                           </div>
-                        )}
+                          {ev.event === "MEDIA_RECEIVED" && (
+                            attempt.imageMediaId
+                              ? <ImageViewer attemptId={attempt.id} />
+                              : <p className="mt-1.5 text-[11px] text-slate-400">Imagen no disponible (pago de prueba)</p>
+                          )}
+                          {ev.data && Object.keys(ev.data).length > 0 && (
+                            <div className="mt-1.5 flex flex-wrap gap-1.5">
+                              {Object.entries(ev.data)
+                                .filter(([key, v]) => {
+                                  if (!isPrimitive(v) || HIDDEN_KEYS.has(key)) return false;
+                                  // `error` es diagnóstico interno (puede venir en inglés, de una
+                                  // librería externa) — cuando el evento ya trae `reason` en español
+                                  // para el mismo caso, se prioriza y se oculta `error` (recomendación
+                                  // del backend, rent-collector-sync.md 2026-08-05T01:55).
+                                  if (key === "error" && isPrimitive(ev.data?.reason)) return false;
+                                  return true;
+                                })
+                                .map(([key, value]) => (
+                                  <span key={key} className="inline-flex items-center gap-1 text-[11px] bg-slate-100 text-slate-600 rounded-md px-2 py-0.5">
+                                    <span className="text-slate-400">{fieldLabel(key)}:</span> {formatEventValue(key, value as string | number | boolean)}
+                                  </span>
+                                ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 

@@ -9,13 +9,14 @@ import {
   BarChart2,
   Bell,
   Settings,
-  Zap,
   X,
   Receipt,
   FlaskConical,
   Database,
   Users,
   UserCog,
+  Map,
+  Banknote,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -37,6 +38,7 @@ const ADMIN_NAV = [
   { label: "Dataset", href: "/admin/dataset", icon: Database },
   { label: "Arrendadores", href: "/admin/arrendadores", icon: UserCog },
   { label: "Inquilinos", href: "/admin/inquilinos", icon: Users },
+  { label: "Planes", href: "/admin/planes", icon: Banknote },
 ];
 
 interface SidebarProps {
@@ -55,7 +57,7 @@ function initials(name: string): string {
 
 export function Sidebar({ open, onClose }: SidebarProps) {
   const pathname = usePathname();
-  const { settings, isAdmin } = useStore();
+  const { settings, isAdmin, setTourActive } = useStore();
 
   // Admin puro: solo nav de administración. Al impersonar, isAdmin=false
   // (el token cambia al del arrendador), así que vuelve a ver BASE_NAV.
@@ -83,14 +85,15 @@ export function Sidebar({ open, onClose }: SidebarProps) {
 
       {/* Logo */}
       <div className="flex items-center gap-2 px-6 py-5 border-b border-white/10">
-        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#2952F3]">
-          <Zap className="w-5 h-5 text-white" />
+        <div className="bg-white rounded-lg px-2.5 py-1.5 inline-flex">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/save-time-logo.png" alt="Rentals" className="h-5 object-contain" />
         </div>
         <div className="flex flex-col leading-tight">
           <span className="text-xs font-semibold text-[#7b9af7] uppercase tracking-wider">
-            Save Time
+            Rentals
           </span>
-          <span className="text-[10px] text-slate-400">by Shiftly</span>
+          <span className="text-[10px] text-slate-400">Dashboard</span>
         </div>
       </div>
 
@@ -105,6 +108,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
               key={item.href}
               href={item.href}
               onClick={onClose}
+              data-tour={`nav-${item.href.replace("/", "")}`}
               className={cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
                 isActive
@@ -118,6 +122,19 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           );
         })}
       </nav>
+
+      {/* Recorrido del sistema */}
+      {!isAdmin && (
+        <div className="px-3 pb-2 border-t border-white/10 pt-2">
+          <button
+            onClick={() => { onClose(); setTourActive(true); }}
+            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:bg-white/10 hover:text-slate-100 transition-colors"
+          >
+            <Map className="w-4 h-4 shrink-0" />
+            Recorrido del sistema
+          </button>
+        </div>
+      )}
 
       {/* User info */}
       <div className="px-4 py-4 border-t border-white/10">

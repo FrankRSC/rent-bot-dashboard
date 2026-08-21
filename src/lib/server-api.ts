@@ -33,21 +33,21 @@ async function serverFetch<T>(path: string): Promise<T | null> {
 
 export const getServerMe = () => serverFetch<Landlord>("me");
 
-export const getServerReport = (landlordId: number, month?: string) =>
+export const getServerReport = (landlordId: string, month?: string) =>
   serverFetch<LandlordReport>(
     `landlords/${landlordId}/report${month ? `?month=${month}` : ""}`
   );
 
-export const getServerProperties = (landlordId: number) =>
+export const getServerProperties = (landlordId: string) =>
   serverFetch<Property[]>(`landlords/${landlordId}/properties`);
 
-export const getServerTenants = (landlordId: number) =>
+export const getServerTenants = (landlordId: string) =>
   serverFetch<Tenant[]>(`landlords/${landlordId}/tenants`);
 
 export const getServerPayments = () =>
   serverFetch<PaymentAttempt[]>(`payments?limit=50`);
 
-export const getServerFacturas = (landlordId: number, period?: string) =>
+export const getServerFacturas = (landlordId: string, period?: string) =>
   serverFetch<Factura[]>(
     `landlords/${landlordId}/facturas${period ? `?period=${period}` : ""}`
   );

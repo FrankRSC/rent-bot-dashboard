@@ -52,6 +52,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/ocr/dataset-cases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["OcrController_findDatasetCases"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/whatsapp": {
         parameters: {
             query?: never;
@@ -130,6 +146,134 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["TenantsController_updateFiscal"];
+        trace?: never;
+    };
+    "/tenants/{id}/period-adjustment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["TenantsController_setPeriodAdjustment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{id}/period-adjustment/{billingPeriod}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["TenantsController_removePeriodAdjustment"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{id}/period-adjustments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["TenantsController_getPeriodAdjustmentsHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AdminSubscriptionsController_findPlans"];
+        put?: never;
+        post: operations["AdminSubscriptionsController_createPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/plans/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["AdminSubscriptionsController_updatePlan"];
+        trace?: never;
+    };
+    "/admin/subscriptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AdminSubscriptionsController_findSubscriptions"];
+        put?: never;
+        post: operations["AdminSubscriptionsController_assign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/subscriptions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["AdminSubscriptionsController_remove"];
+        options?: never;
+        head?: never;
+        patch: operations["AdminSubscriptionsController_update"];
+        trace?: never;
+    };
+    "/admin/subscriptions/{id}/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AdminSubscriptionsController_findPayments"];
+        put?: never;
+        post: operations["AdminSubscriptionsController_registerPayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/payments/manual": {
@@ -228,6 +372,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/payments/metrics/ocr": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PaymentsController_getOcrMetrics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/payments/{id}": {
         parameters: {
             query?: never;
@@ -236,6 +396,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["PaymentsController_findOne"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/payments/{id}/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PaymentsController_getImage"];
         put?: never;
         post?: never;
         delete?: never;
@@ -254,6 +430,38 @@ export interface paths {
         get: operations["LandlordsController_findAll"];
         put?: never;
         post: operations["LandlordsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/landlords/admin/tenants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["LandlordsController_getAllTenantsAcrossLandlords"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/landlords/admin/business-metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["LandlordsController_getBusinessMetrics"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -300,6 +508,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["LandlordsController_getReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/landlords/{id}/subscription": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["LandlordsController_getSubscription"];
         put?: never;
         post?: never;
         delete?: never;
@@ -452,6 +676,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/forgot-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AuthController_forgotPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/reset-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AuthController_resetPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me": {
         parameters: {
             query?: never;
@@ -468,6 +724,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/impersonate/{landlordId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AuthController_impersonate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -475,6 +747,22 @@ export interface components {
         ValidateCepDto: {
             claveRastreo: string;
             bancoEmisor: string;
+        };
+        OcrDatasetCase: {
+            id: number;
+            attemptId: string;
+            methodUsed: string | null;
+            rawText: string | null;
+            originalExtraction: {
+                [key: string]: unknown;
+            };
+            correctedValues: {
+                [key: string]: unknown;
+            };
+            correctedFields: string[];
+            source: string;
+            /** Format: date-time */
+            createdAt: string;
         };
         Tenant: {
             /**
@@ -492,13 +780,14 @@ export interface components {
              * @example 2026-09-01
              */
             adjustmentDate: string | null;
-            id: number;
+            id: string;
             name: string;
             phone: string;
-            propertyId: number;
+            propertyId: string;
             destinationAccount: string;
             destinationAccountType: string;
             paymentDay: number;
+            graceDays: number | null;
             monthlyAmount: number;
             rfc: string;
             taxRegime: string;
@@ -511,14 +800,14 @@ export interface components {
             property: components["schemas"]["Property"];
         };
         Property: {
-            id: number;
+            id: string;
             name: string;
-            landlordId: number;
+            landlordId: string;
             landlord: components["schemas"]["Landlord"];
             tenants: components["schemas"]["Tenant"][];
         };
         Landlord: {
-            id: number;
+            id: string;
             name: string;
             email: string;
             phone: string;
@@ -535,6 +824,7 @@ export interface components {
             facturasEnabled: boolean;
             autoRemindersEnabled: boolean;
             defaultReminderDays: number;
+            defaultGraceDays: number;
             notifyOnPayment: boolean;
             notifyOnOverdue: boolean;
             properties: components["schemas"]["Property"][];
@@ -548,6 +838,7 @@ export interface components {
             destinationAccount?: string;
             destinationAccountType?: string;
             paymentDay?: number;
+            graceDays?: number | null;
             monthlyAmount?: number;
             contractStartDate?: string;
             contractEndDate?: string;
@@ -560,6 +851,7 @@ export interface components {
             destinationAccount?: string;
             destinationAccountType?: string;
             paymentDay?: number;
+            graceDays?: number | null;
             monthlyAmount?: number;
             contractStartDate?: string;
             contractEndDate?: string;
@@ -574,15 +866,116 @@ export interface components {
             taxRegime?: string;
             zipCode?: string;
         };
+        SetPeriodAdjustmentDto: {
+            billingPeriod: string;
+            expectedAmount: number;
+            reason?: string;
+        };
+        TenantPeriodAdjustment: {
+            id: string;
+            tenantId: string;
+            billingPeriod: string;
+            expectedAmount: number;
+            reason: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        Plan: {
+            id: string;
+            name: string;
+            minTenants: number;
+            maxTenants: number | null;
+            pricePerTenant: number;
+            description: string | null;
+            isActive: boolean;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        CreatePlanDto: {
+            name: string;
+            minTenants: number;
+            maxTenants?: number | null;
+            pricePerTenant: number;
+            description?: string;
+            isActive?: boolean;
+        };
+        UpdatePlanDto: {
+            name?: string;
+            minTenants?: number;
+            maxTenants?: number | null;
+            pricePerTenant?: number;
+            description?: string;
+            isActive?: boolean;
+        };
+        AssignSubscriptionDto: {
+            /** Format: uuid */
+            landlordId: string;
+            contractedTenants: number;
+            /** Format: uuid */
+            planId?: string;
+            /** @enum {string} */
+            status?: "ACTIVA" | "VENCIDA" | "CANCELADA" | "CORTESIA";
+            startDate?: string;
+            months?: number;
+            notes?: string;
+        };
+        LandlordSubscription: {
+            id: string;
+            landlordId: string;
+            landlord: components["schemas"]["Landlord"];
+            planId: string;
+            plan: components["schemas"]["Plan"];
+            contractedTenants: number;
+            monthlyAmount: number;
+            /** @enum {string} */
+            status: "ACTIVA" | "VENCIDA" | "CANCELADA" | "CORTESIA";
+            currentPeriodStart: string;
+            currentPeriodEnd: string;
+            notes: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        UpdateSubscriptionDto: {
+            contractedTenants?: number;
+            /** Format: uuid */
+            planId?: string;
+            /** @enum {string} */
+            status?: "ACTIVA" | "VENCIDA" | "CANCELADA" | "CORTESIA";
+            currentPeriodEnd?: string;
+            notes?: string;
+        };
+        RegisterSubscriptionPaymentDto: {
+            amount?: number;
+            paidAt?: string;
+            billingPeriod?: string;
+            notes?: string;
+        };
+        SubscriptionPayment: {
+            id: string;
+            subscriptionId: string;
+            subscription: components["schemas"]["LandlordSubscription"];
+            landlordId: string;
+            billingPeriod: string;
+            amount: number;
+            paidAt: string;
+            recordedBy: string;
+            notes: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
         PaymentAttempt: {
-            id: number;
+            id: string;
             tenantPhone: string;
-            tenantId: number;
+            tenantId: string;
             tenant: components["schemas"]["Tenant"];
             whatsappMessageId: string;
             imageMediaId: string;
             /** @enum {string} */
-            status: "VERIFIED" | "REJECTED" | "INTRABANK_OK" | "INTRABANK_REJECTED" | "ERROR" | "PENDING" | "ABANDONED" | "MANUAL_VERIFIED" | "PARTIAL";
+            status: "VERIFIED" | "REJECTED" | "ERROR" | "REVIEW" | "PENDING" | "ABANDONED" | "MANUAL_VERIFIED" | "PARTIAL";
             /** @enum {string} */
             source: "WHATSAPP" | "MANUAL";
             amount: number | null;
@@ -592,6 +985,7 @@ export interface components {
             billingPeriod: string;
             note: string;
             verifiedOnFirstTry: boolean;
+            claveRastreo: string | null;
             ocrData: {
                 [key: string]: unknown;
             };
@@ -605,10 +999,10 @@ export interface components {
             events: components["schemas"]["PaymentEvent"][];
         };
         PaymentEvent: {
-            id: number;
-            attemptId: number;
+            id: string;
+            attemptId: string;
             /** @enum {string} */
-            event: "MEDIA_RECEIVED" | "TEXT_WITH_DATA" | "OCR_SUCCESS" | "OCR_FAILED" | "FIELD_REQUESTED" | "FIELD_PROVIDED" | "CEP_CALLED" | "VERIFIED" | "REJECTED" | "INTRABANK_OK" | "INTRABANK_REJECTED" | "CEP_GEMINI_RETRY" | "ERROR" | "MANUAL_REGISTERED" | "RECEIPT_UPLOADED" | "MANUAL_REVIEW";
+            event: "MEDIA_RECEIVED" | "TEXT_WITH_DATA" | "OCR_SUCCESS" | "OCR_FAILED" | "FIELD_REQUESTED" | "FIELD_PROVIDED" | "CEP_CALLED" | "VERIFIED" | "REJECTED" | "CEP_GEMINI_RETRY" | "ERROR" | "REVIEW" | "MANUAL_REGISTERED" | "RECEIPT_UPLOADED" | "MANUAL_REVIEW" | "CANCELLED_BY_TENANT";
             data: {
                 [key: string]: unknown;
             };
@@ -618,9 +1012,10 @@ export interface components {
         };
         CreateLandlordDto: {
             name: string;
+            /** Format: email */
             email: string;
-            phone?: string;
-            password?: string;
+            phone: string;
+            password: string;
             ownerBank?: string;
             beneficiaryAccount?: string;
             beneficiaryAccountType?: string;
@@ -638,6 +1033,7 @@ export interface components {
             facturasEnabled?: boolean;
             autoRemindersEnabled?: boolean;
             defaultReminderDays?: number;
+            defaultGraceDays?: number;
             notifyOnPayment?: boolean;
             notifyOnOverdue?: boolean;
         };
@@ -645,20 +1041,23 @@ export interface components {
             name: string;
         };
         CreateFacturaDto: {
-            landlordId: number;
-            tenantId: number;
-            paymentAttemptId?: number;
+            /** Format: uuid */
+            landlordId: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            paymentAttemptId?: string;
             billingPeriod?: string;
             amount?: number;
             concepto?: string;
         };
         Factura: {
             id: string;
-            landlordId: number;
+            landlordId: string;
             landlord: components["schemas"]["Landlord"];
-            tenantId: number;
+            tenantId: string;
             tenant: components["schemas"]["Tenant"];
-            paymentAttemptId: number;
+            paymentAttemptId: string;
             paymentAttempt: components["schemas"]["PaymentAttempt"];
             uuidCfdi: string;
             serie: string;
@@ -723,6 +1122,14 @@ export interface components {
             email: string;
             password: string;
         };
+        ForgotPasswordDto: {
+            /** Format: email */
+            email: string;
+        };
+        ResetPasswordDto: {
+            token: string;
+            password: string;
+        };
         PeriodBalanceDto: {
             tenantId: number;
             tenantName: string;
@@ -742,7 +1149,16 @@ export interface components {
             totalCobrado: number;
             totalPendiente: number;
             cobradoCount: number;
+            /** @description Dentro de su plazo (día de pago + gracia) */
+            vigenteCount: number;
+            /**
+             * @deprecated
+             * @description Alias de vigenteCount
+             */
             pendienteCount: number;
+            /** @description Se le acabó la gracia y el mes sigue corriendo */
+            atrasadoCount: number;
+            /** @description El mes cerró sin pago */
             vencidoCount: number;
             totalTenants: number;
             verifiedOnFirstTryCount: number;
@@ -752,7 +1168,13 @@ export interface components {
             propertyName: string;
             totalCobrado: number;
             cobradoCount: number;
+            vigenteCount: number;
+            /**
+             * @deprecated
+             * @description Alias de vigenteCount
+             */
             pendienteCount: number;
+            atrasadoCount: number;
             vencidoCount: number;
             totalTenants: number;
             /** @description 0–100 */
@@ -767,7 +1189,7 @@ export interface components {
             paymentDay: number | null;
             monthlyAmount: number | null;
             /** @enum {string} */
-            paymentStatus: "Pagado" | "Pendiente" | "Vencido";
+            paymentStatus: "Pagado" | "Vigente" | "Atrasado" | "Vencido";
             /** Format: date-time */
             lastVerifiedAt: string | null;
             amountPaid: number | null;
@@ -856,6 +1278,27 @@ export interface operations {
             };
         };
     };
+    OcrController_findDatasetCases: {
+        parameters: {
+            query?: {
+                limit?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OcrDatasetCase"][];
+                };
+            };
+        };
+    };
     WhatsappController_verifyWebhook: {
         parameters: {
             query: {
@@ -903,7 +1346,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                id: number;
+                id: string;
             };
             cookie?: never;
         };
@@ -924,7 +1367,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                id: number;
+                id: string;
             };
             cookie?: never;
         };
@@ -943,7 +1386,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                id: number;
+                id: string;
             };
             cookie?: never;
         };
@@ -968,7 +1411,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                propertyId: number;
+                propertyId: string;
             };
             cookie?: never;
         };
@@ -989,7 +1432,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                propertyId: number;
+                propertyId: string;
             };
             cookie?: never;
         };
@@ -1014,7 +1457,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                id: number;
+                id: string;
             };
             cookie?: never;
         };
@@ -1033,7 +1476,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                id: number;
+                id: string;
             };
             cookie?: never;
         };
@@ -1058,7 +1501,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                id: number;
+                id: string;
             };
             cookie?: never;
         };
@@ -1075,6 +1518,271 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Tenant"];
                 };
+            };
+        };
+    };
+    TenantsController_setPeriodAdjustment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetPeriodAdjustmentDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantPeriodAdjustment"];
+                };
+            };
+        };
+    };
+    TenantsController_removePeriodAdjustment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                billingPeriod: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    TenantsController_getPeriodAdjustmentsHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantPeriodAdjustment"][];
+                };
+            };
+        };
+    };
+    AdminSubscriptionsController_findPlans: {
+        parameters: {
+            query?: {
+                includeInactive?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plan"][];
+                };
+            };
+        };
+    };
+    AdminSubscriptionsController_createPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePlanDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plan"];
+                };
+            };
+        };
+    };
+    AdminSubscriptionsController_updatePlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePlanDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plan"];
+                };
+            };
+        };
+    };
+    AdminSubscriptionsController_findSubscriptions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>[];
+                };
+            };
+        };
+    };
+    AdminSubscriptionsController_assign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignSubscriptionDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LandlordSubscription"];
+                };
+            };
+        };
+    };
+    AdminSubscriptionsController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AdminSubscriptionsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSubscriptionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LandlordSubscription"];
+                };
+            };
+        };
+    };
+    AdminSubscriptionsController_findPayments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscriptionPayment"][];
+                };
+            };
+        };
+    };
+    AdminSubscriptionsController_registerPayment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterSubscriptionPaymentDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -1119,7 +1827,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                id: number;
+                id: string;
             };
             cookie?: never;
         };
@@ -1142,7 +1850,7 @@ export interface operations {
             };
             header?: never;
             path: {
-                tenantId: number;
+                tenantId: string;
             };
             cookie?: never;
         };
@@ -1163,7 +1871,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                id: number;
+                id: string;
             };
             cookie?: never;
         };
@@ -1199,12 +1907,29 @@ export interface operations {
             };
         };
     };
+    PaymentsController_getOcrMetrics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     PaymentsController_findOne: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                id: number;
+                id: string;
             };
             cookie?: never;
         };
@@ -1217,6 +1942,25 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PaymentAttempt"];
                 };
+            };
+        };
+    };
+    PaymentsController_getImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -1262,12 +2006,48 @@ export interface operations {
             };
         };
     };
+    LandlordsController_getAllTenantsAcrossLandlords: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>[];
+                };
+            };
+        };
+    };
+    LandlordsController_getBusinessMetrics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     LandlordsController_findOne: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                id: number;
+                id: string;
             };
             cookie?: never;
         };
@@ -1288,7 +2068,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                id: number;
+                id: string;
             };
             cookie?: never;
         };
@@ -1307,7 +2087,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                id: number;
+                id: string;
             };
             cookie?: never;
         };
@@ -1332,7 +2112,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                id: number;
+                id: string;
             };
             cookie?: never;
         };
@@ -1355,7 +2135,7 @@ export interface operations {
             };
             header?: never;
             path: {
-                id: number;
+                id: string;
             };
             cookie?: never;
         };
@@ -1369,12 +2149,33 @@ export interface operations {
             };
         };
     };
+    LandlordsController_getSubscription: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
     LandlordsController_getProperties: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                id: number;
+                id: string;
             };
             cookie?: never;
         };
@@ -1395,7 +2196,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                id: number;
+                id: string;
             };
             cookie?: never;
         };
@@ -1512,7 +2313,7 @@ export interface operations {
             };
             header?: never;
             path: {
-                id: number;
+                id: string;
             };
             cookie?: never;
         };
@@ -1533,7 +2334,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                id: number;
+                id: string;
             };
             cookie?: never;
         };
@@ -1558,7 +2359,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                id: number;
+                id: string;
             };
             cookie?: never;
         };
@@ -1579,7 +2380,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                id: number;
+                id: string;
             };
             cookie?: never;
         };
@@ -1614,6 +2415,48 @@ export interface operations {
             };
         };
     };
+    AuthController_forgotPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForgotPasswordDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AuthController_resetPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResetPasswordDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     AuthController_me: {
         parameters: {
             query?: never;
@@ -1627,9 +2470,26 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["Landlord"];
+                content?: never;
+            };
+        };
+    };
+    AuthController_impersonate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                landlordId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };

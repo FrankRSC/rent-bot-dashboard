@@ -1,14 +1,36 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Building2, Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { AuthCard } from "@/components/layout/AuthCard";
 import * as api from "@/lib/api";
 
-export default function RegisterPage() {
+function PasswordStrength({ password }: { password: string }) {
+  if (!password) return null;
+  const score =
+    password.length < 8 ? 1
+    : password.length >= 12 && /[A-Z]/.test(password) && /[0-9!@#$%^&*]/.test(password) ? 3
+    : 2;
+  const bar = ["", "bg-red-400", "bg-amber-400", "bg-emerald-500"] as const;
+  const label = ["", "Débil", "Aceptable", "Segura"] as const;
+  const text = ["", "text-red-500", "text-amber-500", "text-emerald-600"] as const;
+  return (
+    <div className="flex items-center gap-2 mt-1.5">
+      <div className="flex gap-1 flex-1">
+        {[1, 2, 3].map((l) => (
+          <div key={l} className={`h-1 flex-1 rounded-full transition-colors ${l <= score ? bar[score] : "bg-slate-200"}`} />
+        ))}
+      </div>
+      <span className={`text-[11px] font-medium ${text[score]}`}>{label[score]}</span>
+    </div>
+  );
+}
+
+function RegisterContent() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -18,6 +40,8 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  const confirmMismatch = confirm.length > 0 && confirm.length >= password.length && password !== confirm;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,121 +77,139 @@ export default function RegisterPage() {
     }
   };
 
-  const canSubmit = name && email && phone && password && confirm;
+  const canSubmit = name && email && phone && password && confirm && !confirmMismatch;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#F4F5F7] px-4">
-      <div
-        className="w-full max-w-sm bg-white rounded-2xl border border-slate-200/80 p-8"
-        style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
-      >
-        <div className="flex flex-col items-center gap-3 mb-7">
-          <div className="w-11 h-11 rounded-2xl bg-[#eef1fd] flex items-center justify-center">
-            <Building2 className="w-5 h-5 text-[#2952F3]" />
-          </div>
-          <div className="text-center">
-            <h1 className="text-[20px] font-bold text-[#0B1426] tracking-tight">Crear cuenta</h1>
-            <p className="text-[13px] text-slate-400 mt-0.5">Panel de cobranza de rentas</p>
-          </div>
+    <>
+      <div className="mb-7">
+        <h1 className="text-[22px] font-bold text-[#0B1426] tracking-tight">Crear cuenta</h1>
+        <p className="text-[13px] text-slate-400 mt-1">Panel de cobranza de rentas</p>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-1.5">
+          <label htmlFor="reg-name" className="text-[13px] font-medium text-[#0B1426]">Nombre completo</label>
+          <Input
+            id="reg-name"
+            type="text"
+            autoComplete="name"
+            placeholder="Juan Pérez"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="h-10"
+            required
+          />
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-[#0B1426]">Nombre completo</label>
-            <Input
-              type="text"
-              autoComplete="name"
-              placeholder="Juan Pérez"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
-          </div>
+        <div className="space-y-1.5">
+          <label htmlFor="reg-email" className="text-[13px] font-medium text-[#0B1426]">Correo</label>
+          <Input
+            id="reg-email"
+            type="email"
+            autoComplete="email"
+            placeholder="tucorreo@ejemplo.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="h-10"
+            required
+          />
+        </div>
 
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-[#0B1426]">Correo</label>
-            <Input
-              type="email"
-              autoComplete="email"
-              placeholder="tucorreo@ejemplo.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </div>
+        <div className="space-y-1.5">
+          <label htmlFor="reg-phone" className="text-[13px] font-medium text-[#0B1426]">Teléfono</label>
+          <Input
+            id="reg-phone"
+            type="tel"
+            autoComplete="tel"
+            placeholder="52XXXXXXXXXX"
+            inputMode="tel"
+            maxLength={13}
+            value={phone}
+            onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 13))}
+            className="h-10"
+            required
+          />
+        </div>
 
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-[#0B1426]">Teléfono</label>
+        <div className="space-y-1.5">
+          <label htmlFor="reg-password" className="text-[13px] font-medium text-[#0B1426]">Contraseña</label>
+          <div className="relative">
             <Input
-              type="tel"
-              autoComplete="tel"
-              placeholder="5512345678"
-              inputMode="tel"
-              maxLength={13}
-              value={phone}
-              onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 13))}
-              required
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-[#0B1426]">Contraseña</label>
-            <div className="relative">
-              <Input
-                type={showPassword ? "text" : "password"}
-                autoComplete="new-password"
-                placeholder="Mínimo 8 caracteres"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="pr-9"
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                tabIndex={-1}
-                aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
-              >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-[#0B1426]">Confirmar contraseña</label>
-            <Input
+              id="reg-password"
               type={showPassword ? "text" : "password"}
               autoComplete="new-password"
-              placeholder="Repite tu contraseña"
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
+              placeholder="Mínimo 8 caracteres"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="h-10 pr-10"
               required
             />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              tabIndex={-1}
+              aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+            >
+              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
           </div>
+          <PasswordStrength password={password} />
+        </div>
 
-          {error && (
-            <p className="text-[13px] text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-              {error}
+        <div className="space-y-1.5">
+          <label htmlFor="reg-confirm" className="text-[13px] font-medium text-[#0B1426]">Confirmar contraseña</label>
+          <Input
+            id="reg-confirm"
+            type={showPassword ? "text" : "password"}
+            autoComplete="new-password"
+            placeholder="Repite tu contraseña"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            aria-invalid={confirmMismatch}
+            className="h-10"
+            required
+          />
+          {confirmMismatch && (
+            <p role="alert" className="text-[12px] text-red-500">
+              Las contraseñas no coinciden.
             </p>
           )}
+        </div>
 
-          <Button
-            type="submit"
-            disabled={loading || !canSubmit}
-            className="w-full bg-[#2952F3] hover:bg-[#1e3fd4]"
-          >
-            {loading ? "Creando cuenta..." : "Crear cuenta"}
-          </Button>
-        </form>
+        {error && (
+          <p role="alert" className="text-[13px] text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
+            {error}
+          </p>
+        )}
 
-        <p className="mt-5 text-center text-[13px] text-slate-400">
+        <Button
+          type="submit"
+          disabled={loading || !canSubmit}
+          className="w-full h-10 bg-[#2952F3] hover:bg-[#1e3fd4] mt-1"
+        >
+          {loading ? "Creando cuenta..." : "Registrarme"}
+        </Button>
+      </form>
+
+      <div className="mt-6 pt-5 border-t border-slate-100 text-center">
+        <p className="text-[13px] text-slate-400">
           ¿Ya tienes cuenta?{" "}
           <Link href="/login" className="text-[#2952F3] hover:underline font-medium">
             Inicia sesión
           </Link>
         </p>
       </div>
-    </div>
+    </>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <AuthCard>
+      <Suspense fallback={null}>
+        <RegisterContent />
+      </Suspense>
+    </AuthCard>
   );
 }

@@ -1,14 +1,29 @@
 export type AccountType = "CLABE" | "CARD" | "PHONE";
-export type PaymentStatus = "Pagado" | "Parcial" | "Pendiente" | "Vencido" | "Revisión";
+/**
+ * Estado de pago del inquilino en el mes en curso (§Tenant CONTRATOS_API.md).
+ *
+ * Los tres estados de plazo dependen de los **días de gracia** (`Tenant.graceDays`,
+ * con fallback a `Landlord.defaultGraceDays`):
+ *
+ * - `"Vigente"`  — dentro de su plazo: día de pago + gracia. Sin `paymentDay` no
+ *                  hay cómo juzgar el plazo, así que el backend manda esto.
+ * - `"Atrasado"` — se le acabó la gracia y el mes sigue corriendo.
+ * - `"Vencido"`  — el mes cerró sin pago.
+ *
+ * `"Pendiente"` ya NO existe: lo sustituyó `"Vigente"` (2026-08-16). Ojo al leer
+ * código viejo — `"Vencido"` existía antes con el significado que hoy tiene
+ * `"Atrasado"`, así que una comparación heredada puede seguir compilando y
+ * significar otra cosa.
+ */
+export type PaymentStatus = "Pagado" | "Parcial" | "Vigente" | "Atrasado" | "Vencido" | "Revisión";
 
 export type AttemptStatus =
   | "PENDING"
   | "VERIFIED"
   | "REJECTED"
-  | "INTRABANK_OK"
-  | "INTRABANK_REJECTED"
   | "ERROR"
   | "ABANDONED"
+  | "REVIEW"
   | "MANUAL_VERIFIED" // aprobado/registrado a mano por el arrendador (cuenta como Pagado)
   | "PARTIAL"; // abono que aún no cubre la renta del periodo
 
@@ -20,17 +35,16 @@ export type EventType =
   | "FIELD_REQUESTED"
   | "FIELD_PROVIDED"
   | "CEP_CALLED"
+  | "CEP_GEMINI_RETRY"
   | "VERIFIED"
   | "REJECTED"
-  | "INTRABANK_OK"
-  | "INTRABANK_REJECTED"
   | "ERROR"
   | "MANUAL_REGISTERED"
   | "RECEIPT_UPLOADED"
   | "MANUAL_REVIEW";
 
 export interface Landlord {
-  id: number;
+  id: string;
   name: string;
   email: string;
   phone: string;
@@ -55,19 +69,31 @@ export interface Landlord {
 }
 
 export interface Property {
-  id: number;
+  id: string;
   name: string;
-  landlordId: number;
+  landlordId: string;
+}
+
+export interface TenantPeriodAdjustment {
+  id: string;
+  tenantId: string;
+  billingPeriod: string; // YYYY-MM
+  expectedAmount: number;
+  reason: string | null;
+  createdAt: string;
 }
 
 export interface Tenant {
-  id: number;
+  id: string;
   name: string;
   phone: string; // format: 52XXXXXXXXXX
-  propertyId: number;
+  propertyId: string;
   destinationAccount?: string;
   destinationAccountType?: string;
   paymentDay?: number;
+  // Días de gracia de ESTE inquilino. `null` = hereda `defaultGraceDays` del
+  // arrendador. El 0 es un valor real (sin gracia), no un "sin configurar".
+  graceDays?: number | null;
   monthlyAmount?: number;
   rfc?: string;
   taxRegime?: string;
@@ -75,12 +101,13 @@ export interface Tenant {
   paymentStatus?: PaymentStatus;
   lastPaymentDate?: string | null;
   lastReminderAt: string | null; // ISO — último recordatorio enviado por WhatsApp (gap G5 cerrado)
-  // Vigencia de contrato y ajuste de renta (§2.3 de CONTRATOS_API.md).
-  // El backend los acepta en crear/editar; el formulario del UI aún no los captura.
   contractStartDate?: string | null; // YYYY-MM-DD
   contractEndDate?: string | null; // YYYY-MM-DD
   nextMonthlyAmount?: number | null; // renta que aplicará tras el ajuste
   adjustmentDate?: string | null; // YYYY-MM-DD — cuándo entra nextMonthlyAmount
+  // Ajuste puntual de renta para un mes específico (§2.3 CONTRATOS_API.md).
+  // Solo viene de getAllTenants; reemplaza monthlyAmount en el cálculo de paymentStatus.
+  periodAdjustment?: { billingPeriod?: string; expectedAmount: number; reason: string | null } | null;
 }
 
 export interface TenantWithStatus extends Tenant {
@@ -98,16 +125,31 @@ export interface TenantWithStatus extends Tenant {
  */
 export interface OcrData {
   claveRastreo?: string;
-  monto?: number;
+  referencia?: string;
+  concepto?: string;
   bancoEmisor?: string;
   bancoReceptor?: string;
-  cuentaBeneficiario?: string;
-  nombreBeneficiario?: string;
-  cuentaOrdenante?: string;
-  nombreOrdenante?: string;
-  fechaOperacion?: string;
-  concepto?: string;
-  referenciaNumerica?: string;
+  cuentaDestino?: string;
+  monto?: number;
+  fecha?: string;
+  isIntrabancario?: boolean;
+  /**
+   * Solo en la respuesta de `/payments/manual/receipt` (no en el flujo del bot,
+   * que usa `ocrLast4Destino` — nombre distinto, ver rent-collector-sync.md
+   * 2026-08-04T22:35). `cuentaDestino` de arriba es la cuenta esperada/registrada
+   * del tenant; este campo es lo que el OCR leyó del comprobante (cuenta completa).
+   */
+  ocrCuentaDestino?: string | null;
+  /**
+   * Últimos 4 dígitos de la cuenta destino leídos del comprobante — fallback para
+   * comprobantes que enmascaran la cuenta completa (caso común BBVA/Dimo). Antes
+   * de 2026-08-05 el modo manual no tenía este fallback y esos comprobantes
+   * siempre caían en `status: "ERROR"`; ahora, si coincide con la cuenta
+   * registrada → `VERIFIED`, si no coincide → `REJECTED` (ver rent-collector-sync.md
+   * 2026-08-05T01:20). `ERROR` queda solo para cuando no hay ninguna señal
+   * (ni cuenta completa ni último-4).
+   */
+  ocrLast4Destino?: string | null;
   [key: string]: unknown;
 }
 
@@ -132,8 +174,8 @@ export interface CepResponse {
 }
 
 export interface PaymentEvent {
-  id: number;
-  attemptId: number;
+  id: string;
+  attemptId: string;
   event: EventType;
   data?: Record<string, unknown>;
   createdAt: string;
@@ -148,9 +190,9 @@ export type ManualPaymentMethod =
   | "OTRO";
 
 export interface PaymentAttempt {
-  id: number;
+  id: string;
   tenantPhone: string;
-  tenantId?: number;
+  tenantId?: string;
   status: AttemptStatus;
   verifiedOnFirstTry: boolean;
   ocrData?: OcrData;
@@ -175,11 +217,11 @@ export interface PaymentAttempt {
 
 /**
  * Fuente de verdad del estado de cobranza de un inquilino en un periodo.
- * Soporta abonos parciales: `paid` suma VERIFIED + INTRABANK_OK +
- * MANUAL_VERIFIED + PARTIAL del periodo.
+ * Soporta abonos parciales: `paid` suma VERIFIED + MANUAL_VERIFIED + PARTIAL
+ * del periodo.
  */
 export interface PeriodBalance {
-  tenantId: number;
+  tenantId: string;
   tenantName: string;
   period: string; // YYYY-MM
   expected: number | null; // tenant.monthlyAmount (null si no está configurada)
@@ -205,20 +247,20 @@ export interface ReceiptFields {
  * Resultado de subir/completar un comprobante, discriminado por `status`.
  * Flujo INCOMPLETE: el intento queda PENDING con lo detectado; el UI pide
  * `missingFields` y los manda a POST /payments/manual/attempts/:id/complete.
+ * `validation?` solo viene en transferencias interbancarias (Banxico/CEP);
+ * ausente en intrabancarias (cuenta cotejada contra la registrada, sin CEP).
  */
 export type ReceiptValidationResult =
-  | { status: "VERIFIED"; attemptId: number; data: OcrData; validation?: unknown; balance: PeriodBalance }
-  | { status: "INTRABANK_OK"; attemptId: number; data: OcrData; balance: PeriodBalance }
-  | { status: "INCOMPLETE"; attemptId: number; data: OcrData; missingFields: string[] }
-  | { status: "REJECTED"; attemptId: number; data: OcrData; message: string; validation?: unknown }
-  | { status: "INTRABANK_REJECTED"; attemptId: number; data: OcrData; message: string }
-  | { status: "ERROR"; attemptId: number; data: OcrData; message: string };
+  | { status: "VERIFIED"; attemptId: string; data: OcrData; validation?: unknown; balance: PeriodBalance }
+  | { status: "INCOMPLETE"; attemptId: string; data: OcrData; missingFields: string[] }
+  | { status: "REJECTED"; attemptId: string; data: OcrData; message: string; validation?: unknown }
+  | { status: "ERROR"; attemptId: string; data: OcrData; message: string };
 
 export interface ReportTenantRow {
-  tenantId: number;
+  tenantId: string;
   tenantName: string;
   phone: string;
-  propertyId: number;
+  propertyId: string;
   propertyName: string;
   paymentDay: number | null;
   monthlyAmount: number | null;
@@ -229,11 +271,14 @@ export interface ReportTenantRow {
 }
 
 export interface ReportPropertyRow {
-  propertyId: number;
+  propertyId: string;
   propertyName: string;
   totalCobrado: number;
   cobradoCount: number;
+  vigenteCount: number;
+  /** @deprecated Alias de `vigenteCount`. El backend lo mantiene por compatibilidad. */
   pendienteCount: number;
+  atrasadoCount: number;
   vencidoCount: number;
   totalTenants: number;
   paidPercent: number;
@@ -245,7 +290,12 @@ export interface LandlordReport {
     totalCobrado: number;
     totalPendiente: number;
     cobradoCount: number;
+    vigenteCount: number;
+    /** @deprecated Alias de `vigenteCount`. El backend lo mantiene por compatibilidad. */
     pendienteCount: number;
+    // `atrasadoCount` y `vencidoCount` cuentan cosas DISTINTAS desde 2026-08-16
+    // (antes `vencidoCount` era alias del otro).
+    atrasadoCount: number;
     vencidoCount: number;
     totalTenants: number;
     verifiedOnFirstTryCount: number;
@@ -264,6 +314,7 @@ export interface GlobalSettings {
   beneficiaryAccountType: string;
   autoRemindersEnabled: boolean;
   defaultReminderDays: number;
+  defaultGraceDays: number; // 0–28; gracia por defecto de los inquilinos sin `graceDays`
   notifyOnPayment: boolean;
   notifyOnOverdue: boolean;
   rfc: string;
@@ -277,9 +328,9 @@ export type FacturaStatus = "DRAFT" | "STAMPED" | "CANCELLED" | "ERROR";
 
 export interface Factura {
   id: string;
-  landlordId: number;
-  tenantId: number | null;
-  paymentAttemptId: number | null;
+  landlordId: string;
+  tenantId: string | null;
+  paymentAttemptId: string | null;
   uuidCfdi: string | null;
   serie: string | null;
   folio: string | null;
@@ -317,7 +368,7 @@ export interface CancelFacturaResponse {
 // ── Admin — Métricas de negocio globales (§2.10) ─────────────────────────────
 
 export interface BusinessMetricsLandlordDetail {
-  landlordId: number;
+  landlordId: string;
   landlordName: string;
   tenantCount: number;
   esperadoMes: number;
@@ -384,15 +435,15 @@ export interface ExtractionFields {
 }
 
 export interface AdminTenant extends Tenant {
-  landlordId: number;
+  landlordId: string;
   landlordName: string;
 }
 
 export type DatasetCaseSource = "complete" | "review";
 
 export interface DatasetCase {
-  id: number;
-  attemptId: number;
+  id: number; // fila propia de admin/dataset, no migró a UUID (ver backend-schema.ts OcrDatasetCase)
+  attemptId: string;
   methodUsed: string;
   rawText: string | null;
   originalExtraction: ExtractionFields;
@@ -400,4 +451,78 @@ export interface DatasetCase {
   correctedFields: string[]; // subset de keys que realmente cambiaron
   source: DatasetCaseSource;
   createdAt: string;
+}
+
+// ── Planes y suscripciones (§2.10 CONTRATOS_API.md) ──────────────────────────
+// El backend NO cobra: la suscripción se paga en efectivo fuera de la plataforma
+// y el super admin captura lo recibido. No hay pasarela ni checkout.
+//
+// La unidad de cobro es el INQUILINO, no la propiedad (cambio del 2026-08-15).
+// Crear propiedades es libre y sin tope; el 409 salta al dar de alta inquilinos.
+
+export type SubscriptionStatus = "ACTIVA" | "VENCIDA" | "CANCELADA" | "CORTESIA";
+
+export interface Plan {
+  id: string;
+  name: string;
+  minTenants: number;
+  maxTenants: number | null; // null = escalón "10 o más", sin techo
+  pricePerTenant: number;
+  description: string | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface LandlordSubscription {
+  id: string;
+  landlordId: string;
+  planId: string;
+  plan: Plan;
+  contractedTenants: number; // TOPE contratado, no un conteo de uso
+  /**
+   * Inquilinos vivos hoy. Solo viene en `GET /admin/subscriptions`.
+   * No lo derives contando `GET /landlords/admin/tenants`: ese listado usa
+   * `withDeleted: true` e incluye a los dados de baja, que no consumen plan.
+   */
+  tenantsUsed?: number;
+  monthlyAmount: number; // contractedTenants × pricePerTenant, CONGELADO al contratar
+  status: SubscriptionStatus;
+  currentPeriodStart: string; // "YYYY-MM-DD"
+  currentPeriodEnd: string; // "YYYY-MM-DD", último día cubierto (inclusive)
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SubscriptionPayment {
+  id: string;
+  subscriptionId: string;
+  landlordId: string;
+  billingPeriod: string; // "YYYY-MM"
+  amount: number;
+  paidAt: string; // "YYYY-MM-DD"
+  recordedBy: string; // email del admin que capturó el efectivo
+  notes: string | null;
+  createdAt: string;
+}
+
+/**
+ * Vista de solo lectura del plan del arrendador (`GET /landlords/:id/subscription`).
+ * Va con OwnershipGuard: cada arrendador ve solo el suyo.
+ */
+export interface SubscriptionStatusView {
+  hasSubscription: boolean; // false = sin plan asignado (NO se bloquea)
+  /**
+   * ÚNICA fuente para decidir si mostrar el banner de bloqueo.
+   * No lo derives de `status`: puede decir "ACTIVA" con `currentPeriodEnd` ya
+   * pasado hasta que corra el cron (1:00 UTC).
+   */
+  isOperational: boolean;
+  status: SubscriptionStatus | null;
+  planName: string | null;
+  contractedTenants: number | null;
+  tenantsUsed: number; // inquilinos vivos; para "3 de 7 inquilinos"
+  monthlyAmount: number | null;
+  currentPeriodEnd: string | null; // "YYYY-MM-DD"
+  blockedReason: string | null; // texto listo para mostrar; null si opera normal
 }

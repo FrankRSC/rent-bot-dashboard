@@ -7,8 +7,9 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { Breadcrumb } from "@/components/layout/Breadcrumb";
 import { DataBootstrap } from "@/components/layout/DataBootstrap";
 import { ConnectionBanner } from "@/components/layout/ConnectionBanner";
+import { SubscriptionBanner } from "@/components/layout/SubscriptionBanner";
 import { AuthGate } from "@/components/layout/AuthGate";
-import { OnboardingWizard } from "@/components/layout/OnboardingWizard";
+import { OnboardingWizard, TourOverlay } from "@/components/layout/OnboardingWizard";
 import { useStore } from "@/store/useStore";
 
 // Rutas que pertenecen al contexto de arrendador (no de admin).
@@ -28,7 +29,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { logout, endImpersonation, impersonatedBy, settings, isAdmin, authReady } = useStore();
+  const { logout, endImpersonation, impersonatedBy, settings, isAdmin, authReady, tourActive, setTourActive } = useStore();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -46,6 +47,7 @@ export default function DashboardLayout({
     <div className="flex h-screen overflow-hidden bg-[#F4F5F7]">
       <DataBootstrap />
       <OnboardingWizard />
+      {tourActive && <TourOverlay onDone={() => setTourActive(false)} />}
 
       {sidebarOpen && (
         <div
@@ -75,6 +77,7 @@ export default function DashboardLayout({
           </button>
         </header>
         <ConnectionBanner />
+        <SubscriptionBanner />
         {impersonatedBy && (
           <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-start sm:items-center gap-2.5 text-[12px] sm:text-[13px]">
             <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 mt-0.5 sm:mt-0" />

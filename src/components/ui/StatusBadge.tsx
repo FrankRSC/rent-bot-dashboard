@@ -1,32 +1,41 @@
 import { cn } from "@/lib/utils";
 import type { PaymentStatus, AttemptStatus } from "@/lib/types";
 
+/**
+ * Escala de tres plazos (§Tenant CONTRATOS_API.md): `Vigente` → `Atrasado` → `Vencido`.
+ *
+ * `Vigente` va en gris y no en verde a propósito: el verde ya significa `Pagado`,
+ * y "todavía está en plazo" no es lo mismo que "ya pagó". Gris = nada que hacer.
+ */
 export const PAYMENT_STATUS_CLS: Record<PaymentStatus, string> = {
   Pagado:    "bg-emerald-50 border-emerald-200 text-emerald-700",
   Parcial:   "bg-sky-50     border-sky-200     text-sky-700",
-  Pendiente: "bg-amber-50   border-amber-200   text-amber-600",
+  Vigente:   "bg-slate-50   border-slate-200   text-slate-600",
+  Atrasado:  "bg-amber-50   border-amber-200   text-amber-600",
   Vencido:   "bg-red-50     border-red-200     text-red-600",
   Revisión:  "bg-purple-50  border-purple-200  text-purple-600",
 };
 
+// El pulso se reserva para `Atrasado`, que es donde cobrar todavía cambia el
+// resultado. `Vencido` es un mes ya cerrado: se ve, pero no parpadea.
 export const PAYMENT_STATUS_DOT: Record<PaymentStatus, string> = {
   Pagado:    "bg-emerald-500",
   Parcial:   "bg-sky-400 animate-pulse",
-  Pendiente: "bg-amber-400 animate-pulse",
-  Vencido:   "bg-red-500 animate-pulse",
+  Vigente:   "bg-slate-300",
+  Atrasado:  "bg-amber-400 animate-pulse",
+  Vencido:   "bg-red-500",
   Revisión:  "bg-purple-500",
 };
 
 export const ATTEMPT_STATUS_META: Record<AttemptStatus, { label: string; cls: string }> = {
-  VERIFIED:           { label: "Verificado",           cls: "bg-emerald-50 border-emerald-200 text-emerald-700" },
-  INTRABANK_OK:       { label: "Intrabancario OK",      cls: "bg-emerald-50 border-emerald-200 text-emerald-700" },
-  MANUAL_VERIFIED:    { label: "Pagado (manual)",       cls: "bg-emerald-50 border-emerald-200 text-emerald-700" },
-  PENDING:            { label: "Pendiente",             cls: "bg-amber-50   border-amber-200   text-amber-600"  },
-  PARTIAL:            { label: "Abono",                 cls: "bg-amber-100  border-amber-300   text-amber-700"  },
-  REJECTED:           { label: "Revisión",              cls: "bg-purple-50  border-purple-200  text-purple-600" },
-  INTRABANK_REJECTED: { label: "Intrabancario Fallido", cls: "bg-red-50     border-red-200     text-red-600"   },
-  ERROR:              { label: "Error",                 cls: "bg-red-50     border-red-200     text-red-600"   },
-  ABANDONED:          { label: "Abandonado",            cls: "bg-slate-100  border-slate-200   text-slate-500" },
+  VERIFIED:        { label: "Verificado",    cls: "bg-emerald-50 border-emerald-200 text-emerald-700" },
+  MANUAL_VERIFIED: { label: "Pagado (manual)", cls: "bg-emerald-50 border-emerald-200 text-emerald-700" },
+  PENDING:         { label: "Pendiente",     cls: "bg-amber-50   border-amber-200   text-amber-600"  },
+  PARTIAL:         { label: "Abono",         cls: "bg-amber-100  border-amber-300   text-amber-700"  },
+  REJECTED:        { label: "Rechazado",     cls: "bg-red-50     border-red-200     text-red-600"    },
+  REVIEW:          { label: "Revisión",      cls: "bg-purple-50  border-purple-200  text-purple-600" },
+  ERROR:           { label: "Error",         cls: "bg-red-50     border-red-200     text-red-600"    },
+  ABANDONED:       { label: "Abandonado",    cls: "bg-slate-100  border-slate-200   text-slate-500"  },
 };
 
 export function PaymentStatusBadge({ status }: { status: PaymentStatus }) {

@@ -1,90 +1,133 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { cn, formatCurrency } from "@/lib/utils";
 import { useStore } from "@/store/useStore";
 import { ApiErrorState } from "@/components/layout/ApiErrorState";
-import { ArrowRight, Send, AlertCircle, CheckCircle2 } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import {
-  BarChart, Bar, XAxis, ResponsiveContainer, Tooltip,
+  BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell,
 } from "recharts";
-import type { PaymentStatus, Tenant, PaymentAttempt, Property, TenantWithStatus } from "@/lib/types";
-import { PaymentStatusBadge } from "@/components/ui/StatusBadge";
+import type { Tenant, PaymentAttempt, PaymentStatus, Property, TenantWithStatus } from "@/lib/types";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const PERIODS = ["Mayo 26", "Abril", "Marzo", "YTD"] as const;
-type Period = (typeof PERIODS)[number];
-
-const WEEK_DAYS = ["L","M","M","J","V","S","D"];
-
-const monthlyData = [
-  { m: "E", v: 42000 }, { m: "F", v: 55000 }, { m: "M", v: 62000 },
-  { m: "A", v: 65000 }, { m: "M", v: 64800, current: true },
-  { m: "J", v: 0 }, { m: "J", v: 0 }, { m: "A", v: 0 },
-  { m: "S", v: 0 }, { m: "O", v: 0 }, { m: "N", v: 0 }, { m: "D", v: 0 },
-];
-
-const STATUS_ORDER: Record<PaymentStatus, number> = {
-  Vencido: 0, Revisión: 1, Pendiente: 2, Parcial: 2, Pagado: 3,
-};
+const MONTH_LABELS = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+const MONTH_SHORT  = ["ENE","FEB","MAR","ABR","MAY","JUN","JUL","AGO","SEP","OCT","NOV","DIC"];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function buildCalendar(year: number, month: number): (number | null)[] {
-  const firstDay = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const startOffset = (firstDay + 6) % 7;
-  const cells: (number | null)[] = Array(startOffset).fill(null);
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-  while (cells.length % 7 !== 0) cells.push(null);
-  return cells;
-}
-
-function initials(name: string) {
-  return name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
-}
 
 function reminderSentThisMonth(lastReminderAt?: string | null): boolean {
   if (!lastReminderAt) return false;
   const sent = new Date(lastReminderAt);
-  const now = new Date();
+  const now  = new Date();
   return sent.getFullYear() === now.getFullYear() && sent.getMonth() === now.getMonth();
 }
 
 function toTenantsWithStatus(tenants: Tenant[]): TenantWithStatus[] {
   return tenants.map((t) => ({
     ...t,
-    paymentStatus: t.paymentStatus ?? "Pendiente",
+    paymentStatus: t.paymentStatus ?? "Vigente",
     lastPaymentDate: t.lastPaymentDate ?? null,
     reminderSent: reminderSentThisMonth(t.lastReminderAt),
   }));
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// ─── Status badge (movimientos) ───────────────────────────────────────────────
 
-function CollectionRing({ percent }: { percent: number }) {
-  const r = 44;
-  const sw = 7;
-  const nr = r - sw / 2;
-  const c = 2 * Math.PI * nr;
-  const offset = c - (Math.min(percent, 100) / 100) * c;
+/**
+ * Variante compacta del badge de estado para la tabla de movimientos.
+ *
+ * `status` se tipa como `PaymentStatus` y no como `string` a propósito: venía
+ * suelto y por eso el compilador no avisó cuando la escala pasó a tres plazos
+ * — `Atrasado` caía al genérico y se pintaba con una etiqueta que ya no existe.
+ */
+const MOVIMIENTO_BADGE: Record<PaymentStatus, { label: string; cls: string }> = {
+  Pagado:   { label: "Cobrado",    cls: "bg-emerald-50 text-emerald-700 border-emerald-100" },
+  Parcial:  { label: "~ Parcial",  cls: "bg-blue-50    text-blue-700    border-blue-100"    },
+  Vigente:  { label: "En plazo",   cls: "bg-slate-50   text-slate-600   border-slate-200"   },
+  Atrasado: { label: "⚠ Atrasado", cls: "bg-amber-50   text-amber-700   border-amber-100"   },
+  Vencido:  { label: "⚠ Vencido",  cls: "bg-red-50     text-red-700     border-red-100"     },
+  Revisión: { label: "Revisión",   cls: "bg-purple-50  text-purple-700  border-purple-100"  },
+};
+
+function MovimientosBadge({ status }: { status: PaymentStatus }) {
+  const { label, cls } = MOVIMIENTO_BADGE[status];
   return (
-    <div className="relative flex items-center justify-center w-[110px] h-[110px] shrink-0">
-      <svg width="110" height="110" viewBox="0 0 100 100" style={{ transform: "rotate(-90deg)" }}>
-        <circle cx="50" cy="50" r={nr} fill="none" stroke="#f1f5f9" strokeWidth={sw} />
-        <circle
-          cx="50" cy="50" r={nr} fill="none"
-          stroke="#10b981" strokeWidth={sw}
-          strokeDasharray={c} strokeDashoffset={offset}
-          strokeLinecap="round"
-          style={{ transition: "stroke-dashoffset 1s cubic-bezier(.4,0,.2,1)" }}
-        />
-      </svg>
-      <div className="absolute flex flex-col items-center justify-center">
-        <span className="text-[24px] font-bold text-[#0B1426] leading-none tracking-tight">{percent}%</span>
-        <span className="text-[10px] text-slate-400 font-medium mt-0.5 tracking-wide">COBRADO</span>
+    <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-full border", cls)}>
+      {status === "Pagado" && (
+        <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+          <path d="M1.5 4L3 5.5L6.5 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )}
+      {label}
+    </span>
+  );
+}
+
+// ─── Calendar grid ────────────────────────────────────────────────────────────
+
+function CalendarGrid({ tenants, now }: { tenants: TenantWithStatus[]; now: Date }) {
+  const year  = now.getFullYear();
+  const month = now.getMonth();
+  const today = now.getDate();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDow    = new Date(year, month, 1).getDay();
+  const offset      = firstDow === 0 ? 6 : firstDow - 1; // Monday-first
+
+  const dayMap = new Map<number, "paid" | "pending">();
+  tenants.forEach((t) => {
+    if (!t.paymentDay) return;
+    const d = Number(t.paymentDay);
+    const s = t.paymentStatus === "Pagado" ? "paid" : "pending";
+    if (!dayMap.has(d)) dayMap.set(d, s);
+    else if (dayMap.get(d) === "paid" && s === "pending") dayMap.set(d, "pending");
+  });
+
+  const cells: (number | null)[] = [
+    ...Array<null>(offset).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+
+  return (
+    <div>
+      <div className="grid grid-cols-7 mb-0.5">
+        {["L", "M", "M", "J", "V", "S", "D"].map((h, i) => (
+          <div key={i} className="text-center text-[10px] font-bold text-slate-300 uppercase py-1">
+            {h}
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-[3px]">
+        {cells.map((day, i) =>
+          day === null ? (
+            <div key={`e${i}`} />
+          ) : (
+            <div
+              key={day}
+              // El anillo de "hoy" se superpone al color de estado en vez de
+              // reemplazarlo: si hoy vence un pago, ambos datos deben verse.
+              aria-label={
+                dayMap.get(day) === "paid"   ? `${day}: cobrado`
+                : dayMap.get(day) === "pending" ? `${day}: pendiente`
+                : String(day)
+              }
+              className={cn(
+                "aspect-square flex items-center justify-center rounded-md text-[10px] transition-colors",
+                dayMap.get(day) === "paid"
+                  ? "bg-emerald-100 text-emerald-700 font-medium"
+                  : dayMap.get(day) === "pending"
+                  ? "bg-amber-100 text-amber-700 font-medium"
+                  : "text-slate-400",
+                day === today && "ring-[1.5px] ring-[#2952F3] font-bold",
+                day === today && !dayMap.has(day) && "text-[#2952F3]"
+              )}
+            >
+              {day}
+            </div>
+          )
+        )}
       </div>
     </div>
   );
@@ -98,10 +141,19 @@ interface DashboardViewProps {
   initialProperties: Property[] | null;
 }
 
+interface MovimientoRow {
+  key: string;
+  day: number | null;
+  tenantName: string;
+  propertyName: string;
+  amount: number;
+  status: PaymentStatus;
+  monthIdx?: number;
+}
+
 // ─── View ─────────────────────────────────────────────────────────────────────
 
 export function DashboardView({ initialTenants, initialPayments, initialProperties }: DashboardViewProps) {
-  const [activePeriod, setActivePeriod] = useState<Period>("Mayo 26");
   const {
     payments: storePayments,
     tenantsWithStatus: storeTenantsWithStatus,
@@ -110,434 +162,520 @@ export function DashboardView({ initialTenants, initialPayments, initialProperti
     fetchProperties, fetchPayments, fetchAllTenants,
   } = useStore();
 
-  // SSR data se usa para el primer render; el store toma el control una vez cargado.
-  const payments = storePayments.length > 0 ? storePayments : (initialPayments ?? []);
-  const properties = storeProperties.length > 0 ? storeProperties : (initialProperties ?? []);
-  const tenantsWithStatus = storeTenantsWithStatus.length > 0
-    ? storeTenantsWithStatus
-    : toTenantsWithStatus(initialTenants ?? []);
+  const [selectedPeriod, setSelectedPeriod] = useState(0);
 
-  const now = useMemo(() => new Date(), []);
-  const calendar = buildCalendar(now.getFullYear(), now.getMonth());
-  const today = now.getDate();
+  // Memoizados a propósito: sin esto cada render crea arrays nuevos y todos los
+  // useMemo que dependen de ellos (movimientosRows incluido) se recalculan siempre.
+  const properties = useMemo(
+    () => (storeProperties.length > 0 ? storeProperties : (initialProperties ?? [])),
+    [storeProperties, initialProperties]
+  );
+  const tenantsWithStatus = useMemo(
+    () => (storeTenantsWithStatus.length > 0
+      ? storeTenantsWithStatus
+      : toTenantsWithStatus(initialTenants ?? [])),
+    [storeTenantsWithStatus, initialTenants]
+  );
+
+  const ownTenantIds = useMemo(
+    () => new Set(tenantsWithStatus.map((t) => String(t.id))),
+    [tenantsWithStatus]
+  );
+  const payments = useMemo(() => {
+    const raw = storePayments.length > 0 ? storePayments : (initialPayments ?? []);
+    if (ownTenantIds.size === 0) return [];
+    return raw.filter((p) => p.tenantId != null && ownTenantIds.has(String(p.tenantId)));
+  }, [storePayments, initialPayments, ownTenantIds]);
+
+  const now       = useMemo(() => new Date(), []);
+  const today     = now.getDate();
   const currentYM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const thisMonthPayments = payments.filter((a) => a.createdAt.startsWith(currentYM));
 
-  const cobradoThisMonth = thisMonthPayments.filter(
-    (a) => a.status === "VERIFIED" || a.status === "INTRABANK_OK"
+  // ── Period tabs ────────────────────────────────────────────────────────────
+
+  const periods = useMemo(() => {
+    const m0 = now.getMonth();
+    const y0 = now.getFullYear();
+    const result: { label: string; ym: string | null; ytd: boolean }[] = [
+      { label: `${MONTH_SHORT[m0]} ${y0}`, ym: currentYM, ytd: false },
+    ];
+    for (let back = 1; back <= 2; back++) {
+      const m  = ((m0 - back) % 12 + 12) % 12;
+      const y  = m0 - back < 0 ? y0 - 1 : y0;
+      result.push({ label: MONTH_SHORT[m], ym: `${y}-${String(m + 1).padStart(2, "0")}`, ytd: false });
+    }
+    result.push({ label: "YTD", ym: null, ytd: true });
+    return result;
+  }, [now, currentYM]);
+
+  // ── Current-period aggregations ────────────────────────────────────────────
+
+  const cobradoThisMonth = payments.filter((a) =>
+    a.createdAt.startsWith(currentYM) &&
+    (a.status === "VERIFIED" || a.status === "MANUAL_VERIFIED")
   );
-
+  // El fallback a `amount` es obligatorio: los pagos registrados a mano no tienen
+  // ocrData ni cepResponse (types.ts §PaymentAttempt.amount). Sin él este KPI
+  // contradice a PagosView y a la gráfica de barras.
   const totalCobrado = cobradoThisMonth.reduce(
-    (s, a) => s + Number(a.ocrData?.monto ?? a.cepResponse?.monto ?? 0), 0
+    (s, a) => s + Number(a.ocrData?.monto ?? a.cepResponse?.monto ?? a.amount ?? 0), 0
   );
 
-  const cobradoCount  = tenantsWithStatus.filter((t) => t.paymentStatus === "Pagado").length;
-  const pendienteCount = tenantsWithStatus.filter((t) => t.paymentStatus === "Pendiente").length;
-  const vencidoCount  = tenantsWithStatus.filter((t) => t.paymentStatus === "Vencido").length;
-  const revisionCount = tenantsWithStatus.filter((t) => t.paymentStatus === "Revisión").length;
+  const cobradoCount   = tenantsWithStatus.filter((t) => t.paymentStatus === "Pagado").length;
+  const porCobrarCount = tenantsWithStatus.filter((t) => t.paymentStatus !== "Pagado").length;
   const totalTenants  = tenantsWithStatus.length;
-  const paidPercent   = totalTenants > 0 ? Math.round((cobradoCount / totalTenants) * 100) : 0;
+  const totalExpected = tenantsWithStatus.reduce((s, t) => s + (t.monthlyAmount ? Number(t.monthlyAmount) : 0), 0);
 
-  const totalExpected = tenantsWithStatus.reduce(
-    (s, t) => s + (t.monthlyAmount ? Number(t.monthlyAmount) : 0), 0
+  const paidThisPeriodByTenant = useMemo(() => {
+    const map = new Map<string, number>();
+    payments
+      .filter((a) =>
+        a.createdAt.startsWith(currentYM) &&
+        (a.status === "VERIFIED" || a.status === "MANUAL_VERIFIED" || a.status === "PARTIAL")
+      )
+      .forEach((a) => {
+        if (a.tenantId == null) return;
+        const tid = String(a.tenantId);
+        const amt = Number(a.ocrData?.monto ?? a.cepResponse?.monto ?? a.amount ?? 0);
+        map.set(tid, (map.get(tid) ?? 0) + amt);
+      });
+    return map;
+  }, [payments, currentYM]);
+
+  /**
+   * "Por cobrar" = todo el que no esté `Pagado`, sin importar el plazo, igual que
+   * `summary.totalPendiente` del backend. Antes excluía a los morosos, así que el
+   * número BAJABA justo cuando peor iba la cobranza.
+   *
+   * Diferencia deliberada con el backend: aquí sí se resta lo ya abonado, así que
+   * un pago parcial reduce el pendiente. El suyo suma el `monthlyAmount` completo.
+   */
+  const totalPorCobrar = tenantsWithStatus
+    .filter((t) => t.paymentStatus !== "Pagado")
+    .reduce((s, t) => {
+      const expected  = t.monthlyAmount ? Number(t.monthlyAmount) : 0;
+      const paidSoFar = paidThisPeriodByTenant.get(String(t.id)) ?? 0;
+      return s + Math.max(expected - paidSoFar, 0);
+    }, 0);
+
+  // ── Upcoming / next due ────────────────────────────────────────────────────
+
+  const daysInCurrentMonth = useMemo(
+    () => new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate(),
+    [now]
   );
 
-  const paidDays = new Set(cobradoThisMonth.map((a) => new Date(a.createdAt).getDate()));
+  const upcomingPayments = useMemo(() => {
+    return tenantsWithStatus
+      .filter((t) => t.paymentStatus !== "Pagado" && t.paymentDay != null)
+      .map((t) => {
+        const day = Number(t.paymentDay);
+        const diff = day - today;
+        const daysUntil = diff >= 0 ? diff : diff + daysInCurrentMonth;
+        return { tenant: t, daysUntil, dueDay: day };
+      })
+      .sort((a, b) => a.daysUntil - b.daysUntil);
+  }, [tenantsWithStatus, today, daysInCurrentMonth]);
 
-  const sortedTenants = useMemo(() =>
-    [...tenantsWithStatus].sort(
-      (a, b) => STATUS_ORDER[a.paymentStatus] - STATUS_ORDER[b.paymentStatus]
-    ),
-  [tenantsWithStatus]);
-
+  const nextDue = upcomingPayments[0];
   const nextDueLabel = useMemo(() => {
-    const days = tenantsWithStatus
-      .filter((t) => t.paymentStatus !== "Pagado" && t.paymentDay)
-      .map((t) => t.paymentDay as number)
-      .sort((a, b) => a - b);
-    if (!days.length) return "—";
-    const target = new Date(now.getFullYear(), now.getMonth(), days[0]);
-    if (target <= now) target.setMonth(target.getMonth() + 1);
-    return target.toLocaleDateString("es-MX", { day: "2-digit", month: "short" });
-  }, [tenantsWithStatus, now]);
+    if (!nextDue) return null;
+    const d = new Date(now);
+    d.setDate(d.getDate() + nextDue.daysUntil);
+    return `${String(d.getDate()).padStart(2, "0")} ${MONTH_LABELS[d.getMonth()].toLowerCase()}`;
+  }, [nextDue, now]);
+  const nextDueProperty = nextDue
+    ? (properties.find((p) => p.id === nextDue.tenant.propertyId)?.name ?? nextDue.tenant.name)
+    : null;
 
-  const monthLabel = now.toLocaleDateString("es-MX", { month: "long", year: "numeric" });
+  // ── Bar chart (YTD, 12 bars) ───────────────────────────────────────────────
+
+  const monthlyData = useMemo(() => {
+    const year = now.getFullYear();
+    return MONTH_LABELS.map((m, idx) => {
+      const ym = `${year}-${String(idx + 1).padStart(2, "0")}`;
+      const v  = payments
+        .filter((a) =>
+          a.createdAt.startsWith(ym) &&
+          (a.status === "VERIFIED" || a.status === "MANUAL_VERIFIED")
+        )
+        .reduce((s, a) => s + Number(a.ocrData?.monto ?? a.cepResponse?.monto ?? a.amount ?? 0), 0);
+      return { m, v, idx };
+    });
+  }, [payments, now]);
+
+  // ── Movimientos rows ───────────────────────────────────────────────────────
+
+  const movimientosRows = useMemo((): MovimientoRow[] => {
+    const period = periods[selectedPeriod];
+
+    if (selectedPeriod === 0) {
+      return tenantsWithStatus
+        .map((t): MovimientoRow => {
+          const property = properties.find((p) => p.id === t.propertyId);
+          const verified = payments.find((p) =>
+            String(p.tenantId) === String(t.id) &&
+            p.createdAt.startsWith(currentYM) &&
+            (p.status === "VERIFIED" || p.status === "MANUAL_VERIFIED" || p.status === "PARTIAL")
+          );
+          const amount = verified
+            ? Number(verified.ocrData?.monto ?? verified.cepResponse?.monto ?? verified.amount ?? t.monthlyAmount ?? 0)
+            : Number(t.monthlyAmount ?? 0);
+          const day = verified
+            ? new Date(verified.createdAt).getDate()
+            : t.paymentDay ? Number(t.paymentDay) : null;
+          return {
+            key: t.id,
+            day,
+            tenantName: t.name,
+            propertyName: property?.name ?? "—",
+            amount,
+            status: t.paymentStatus,
+          };
+        })
+        .sort((a, b) => {
+          const da = a.day ?? 99;
+          const db = b.day ?? 99;
+          return da !== db ? da - db : a.tenantName.localeCompare(b.tenantName, "es");
+        });
+    }
+
+    if (period.ytd) {
+      const yearPfx = `${now.getFullYear()}-`;
+      return payments
+        .filter((p) =>
+          p.createdAt.startsWith(yearPfx) &&
+          (p.status === "VERIFIED" || p.status === "MANUAL_VERIFIED")
+        )
+        .map((p): MovimientoRow => {
+          const tenant   = tenantsWithStatus.find((t) => String(t.id) === String(p.tenantId));
+          const property = tenant ? properties.find((pr) => pr.id === tenant.propertyId) : null;
+          const d = new Date(p.createdAt);
+          return {
+            key: p.id,
+            day: d.getDate(),
+            tenantName: tenant?.name ?? "—",
+            propertyName: property?.name ?? "—",
+            amount: Number(p.ocrData?.monto ?? p.cepResponse?.monto ?? p.amount ?? 0),
+            status: "Pagado",
+            monthIdx: d.getMonth(),
+          };
+        })
+        .sort((a, b) => {
+          const ma = a.monthIdx ?? 0;
+          const mb = b.monthIdx ?? 0;
+          return ma !== mb ? ma - mb : (a.day ?? 0) - (b.day ?? 0);
+        });
+    }
+
+    return payments
+      .filter((p) =>
+        period.ym != null &&
+        p.createdAt.startsWith(period.ym) &&
+        (p.status === "VERIFIED" || p.status === "MANUAL_VERIFIED")
+      )
+      .map((p): MovimientoRow => {
+        const tenant   = tenantsWithStatus.find((t) => String(t.id) === String(p.tenantId));
+        const property = tenant ? properties.find((pr) => pr.id === tenant.propertyId) : null;
+        return {
+          key: p.id,
+          day: new Date(p.createdAt).getDate(),
+          tenantName: tenant?.name ?? "—",
+          propertyName: property?.name ?? "—",
+          amount: Number(p.ocrData?.monto ?? p.cepResponse?.monto ?? p.amount ?? 0),
+          status: "Pagado",
+        };
+      })
+      .sort((a, b) => (a.day ?? 0) - (b.day ?? 0));
+  }, [selectedPeriod, periods, tenantsWithStatus, properties, payments, currentYM, now]);
+
+  const movimientosTotal = movimientosRows
+    .filter((r) => r.status === "Pagado")
+    .reduce((s, r) => s + r.amount, 0);
+
+  // ── Error state ────────────────────────────────────────────────────────────
 
   const hasError = !!(propertiesState.error || paymentsState.error);
-  const handleRetry = () => {
-    fetchPayments(); fetchAllTenants(); fetchProperties();
-  };
-
   if (hasError) {
     return (
       <div className="bg-white rounded-2xl border border-slate-200/80">
-        <ApiErrorState onRetry={handleRetry} />
+        <ApiErrorState onRetry={() => { fetchPayments(); fetchAllTenants(); fetchProperties(); }} />
       </div>
     );
   }
 
+  // ── Render ─────────────────────────────────────────────────────────────────
+
   return (
-    <div className="space-y-5">
+    <div
+      className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden"
+      style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 8px 32px rgba(0,0,0,0.06)" }}
+    >
 
-      {/* ── Hero ────────────────────────────────────────────────────── */}
-      <div
-        className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden"
-        style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
-      >
+      {/* ── Header ──────────────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-slate-100">
+        <h1 className="text-[14px] sm:text-[15px] font-semibold text-[#0B1426]">
+          Resumen de cobranza
+        </h1>
+        <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400 shrink-0">
+          {MONTH_SHORT[now.getMonth()]} {now.getFullYear()}
+        </span>
+      </div>
 
-        {/* Top bar */}
-        <div className="flex flex-col gap-2 px-4 pt-4 pb-0 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:pt-5">
-          <div className="flex items-center gap-3">
-            <p className="text-[13px] font-semibold text-slate-600 capitalize">{monthLabel}</p>
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-60" />
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
-              </span>
-              En vivo
-            </span>
-          </div>
-          <div className="flex items-center gap-0.5 bg-slate-100 border border-slate-200 rounded-xl p-1">
-            {PERIODS.map((p) => (
-              <button
-                key={p}
-                onClick={() => setActivePeriod(p)}
-                className={cn(
-                  "px-3 py-1 text-[12px] font-semibold rounded-lg transition-all whitespace-nowrap",
-                  activePeriod === p ? "bg-[#2952F3] text-white" : "text-slate-500 hover:text-slate-700"
-                )}
-              >
-                {p}
-              </button>
-            ))}
-          </div>
+      {/* ── KPI bar ─────────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 border-b border-slate-100 divide-x divide-slate-100 divide-y lg:divide-y-0">
+
+        <div className="px-5 sm:px-6 py-5">
+          <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400 mb-2">
+            Cobrado del mes
+          </p>
+          <p className="text-[22px] sm:text-[26px] font-bold text-[#0B1426] tabular-nums leading-none mb-1.5">
+            {formatCurrency(totalCobrado).replace(/\.\d+$/, "")}
+          </p>
+          <p className="text-[11px] text-[#2952F3] font-medium">
+            ↑ {cobradoCount} de {totalTenants} contrato{totalTenants !== 1 ? "s" : ""}
+          </p>
         </div>
 
-        {/* Main content */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 px-4 sm:px-6 py-6">
+        <div className="px-5 sm:px-6 py-5">
+          <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400 mb-2">
+            Por cobrar
+          </p>
+          <p className="text-[22px] sm:text-[26px] font-bold text-[#0B1426] tabular-nums leading-none mb-1.5">
+            {formatCurrency(totalPorCobrar).replace(/\.\d+$/, "")}
+          </p>
+          {/* "sin pagar" y no "esperando": ahora incluye a los morosos, que no
+              están esperando su fecha — ya se les pasó. */}
+          <p className="text-[11px] text-amber-500 font-medium">
+            {porCobrarCount} contrato{porCobrarCount !== 1 ? "s" : ""} · sin pagar
+          </p>
+        </div>
 
-          {/* Left: Big number */}
-          <div className="flex-1 min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-slate-400 mb-2">
-              Cobrado del mes
-            </p>
-            <div className="flex items-baseline gap-1 tabular-nums">
-              <span className="text-[42px] sm:text-[52px] font-bold text-[#0B1426] leading-none tracking-tight">
-                {formatCurrency(totalCobrado).replace(/\.\d+$/, "")}
-              </span>
-              <span className="text-[20px] font-light text-slate-400 leading-none">
-                {formatCurrency(totalCobrado).match(/\.\d+$/)?.[0] ?? ""}
-              </span>
-            </div>
-            {totalExpected > 0 && (
-              <p className="text-[13px] text-slate-400 mt-1.5">
-                de{" "}
-                <span className="text-slate-600 font-medium">
-                  {formatCurrency(totalExpected)}
-                </span>{" "}
-                esperado este mes
-              </p>
-            )}
+        <div className="px-5 sm:px-6 py-5">
+          <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400 mb-2">
+            Por cobrar total
+          </p>
+          <p className="text-[22px] sm:text-[26px] font-bold text-[#0B1426] tabular-nums leading-none mb-1.5">
+            {formatCurrency(totalExpected).replace(/\.\d+$/, "")}
+          </p>
+          <p className="text-[11px] text-slate-400 font-medium">
+            {properties.length} propiedad{properties.length !== 1 ? "es" : ""} activa{properties.length !== 1 ? "s" : ""}
+          </p>
+        </div>
 
-            {/* Progress bar */}
-            <div className="mt-4 space-y-1.5">
-              <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-emerald-500 transition-all duration-1000"
-                  style={{ width: `${paidPercent}%` }}
-                />
-              </div>
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px]">
-                {cobradoCount > 0 && (
-                  <span className="text-emerald-600 font-medium">
-                    {cobradoCount} cobrado{cobradoCount !== 1 ? "s" : ""}
-                  </span>
-                )}
-                {pendienteCount > 0 && (
-                  <span className="text-amber-500 font-medium">
-                    {pendienteCount} pendiente{pendienteCount !== 1 ? "s" : ""}
-                  </span>
-                )}
-                {vencidoCount > 0 && (
-                  <span className="text-red-500 font-medium">
-                    {vencidoCount} vencido{vencidoCount !== 1 ? "s" : ""}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Center: Ring */}
-          <CollectionRing percent={paidPercent} />
-
-          {/* Right: Mini stats */}
-          <div className="hidden sm:flex flex-col gap-4 pl-4 border-l border-slate-100 min-w-[140px]">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400 mb-1">
-                Contratos
-              </p>
-              <p className="text-[22px] font-bold text-[#0B1426] leading-none">{totalTenants}</p>
-              <p className="text-[11px] text-slate-400 mt-0.5">activos este mes</p>
-            </div>
-            <div className="w-full h-px bg-slate-100" />
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400 mb-1">
-                Próximo vence
-              </p>
-              <p className="text-[22px] font-bold text-[#2952F3] leading-none capitalize">
+        <div className="px-5 sm:px-6 py-5">
+          <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400 mb-2">
+            Próximo vencimiento
+          </p>
+          {nextDueLabel ? (
+            <>
+              <p className="text-[22px] sm:text-[26px] font-bold text-[#2952F3] tabular-nums leading-none mb-1.5">
                 {nextDueLabel}
               </p>
-              <p className="text-[11px] text-slate-400 mt-0.5">recordatorio activo</p>
-            </div>
-          </div>
-
+              <p className="text-[11px] text-[#2952F3] font-medium truncate">
+                {nextDueProperty}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-[22px] sm:text-[26px] font-bold text-slate-300 leading-none mb-1.5">
+                —
+              </p>
+              <p className="text-[11px] text-slate-400 font-medium">Todos al corriente</p>
+            </>
+          )}
         </div>
       </div>
 
-      {/* ── Contenido ───────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-5">
+      {/* ── Main content ──────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_300px]">
 
-        {/* Estado de contratos */}
-        <div
-          className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden"
-          style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
-        >
-          {/* Header */}
-          <div className="flex flex-col gap-2 px-4 py-4 border-b border-slate-100 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-            <div>
-              <h2 className="text-[14px] font-semibold text-[#0B1426]">Estado de contratos</h2>
-              <p className="text-[12px] text-slate-400 mt-0.5 capitalize">{monthLabel}</p>
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              {vencidoCount > 0 && (
-                <span className="inline-flex items-center gap-1 bg-red-50 border border-red-200 text-red-600 text-[11px] font-semibold px-2.5 py-1 rounded-full">
-                  <AlertCircle className="w-3 h-3" /> {vencidoCount} vencido{vencidoCount !== 1 ? "s" : ""}
-                </span>
-              )}
-              {revisionCount > 0 && (
-                <span className="inline-flex items-center gap-1 bg-purple-50 border border-purple-200 text-purple-600 text-[11px] font-semibold px-2.5 py-1 rounded-full">
-                  {revisionCount} en revisión
-                </span>
-              )}
-              <Link
-                href="/recordatorios"
-                className="flex items-center gap-1 text-[12px] font-semibold text-[#2952F3] hover:text-[#1e3fd4] transition-colors shrink-0"
-              >
-                Recordatorios <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
+        {/* ── Movimientos ───────────────────────────────────────────────────── */}
+        <div className="overflow-hidden">
+
+          <div className="flex items-center justify-between gap-3 px-5 sm:px-6 py-3 bg-slate-50/60 border-b border-slate-100">
+            <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 shrink-0">
+              Movimientos
+            </span>
+            {/* Las pestañas viven aquí, no en el encabezado de la tarjeta: sólo
+                filtran esta tabla. Los KPI de arriba son siempre del mes en curso. */}
+            <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden divide-x divide-slate-200 bg-white shrink-0">
+              {periods.map((p, i) => (
+                <button
+                  key={i}
+                  onClick={() => setSelectedPeriod(i)}
+                  aria-pressed={selectedPeriod === i}
+                  className={cn(
+                    "px-2.5 sm:px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide transition-colors whitespace-nowrap",
+                    selectedPeriod === i
+                      ? "bg-[#0B1426] text-white"
+                      : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
+                  )}
+                >
+                  {p.label}
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* Column labels */}
-          <div className="hidden sm:grid grid-cols-[1fr_130px_110px_80px] items-center px-6 py-2.5 border-b border-slate-100 bg-slate-50/60">
-            {["Inquilino · Propiedad", "Renta mensual", "Estado", "Acción"].map((h, i) => (
-              <span
-                key={i}
-                className={cn(
-                  "text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400",
-                  i === 1 && "text-right",
-                  i === 2 && "text-center",
-                  i === 3 && "text-center",
-                )}
-              >
-                {h}
-              </span>
-            ))}
-          </div>
-
-          {/* Tenant rows */}
-          {sortedTenants.length === 0 ? (
-            <div className="py-16 text-center">
-              <p className="text-[13px] text-slate-400">No hay contratos registrados</p>
-              <Link
-                href="/propiedades"
-                className="mt-2 inline-flex items-center gap-1 text-[13px] font-semibold text-[#2952F3]"
-              >
-                Agregar propiedad <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
+          {movimientosRows.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center px-4">
+              <p className="text-[13px] font-medium text-slate-400">Sin movimientos en este período</p>
+              <p className="text-[11px] text-slate-300 mt-0.5">Los pagos verificados aparecerán aquí</p>
             </div>
-          ) : sortedTenants.map((tenant) => {
-            const property = properties.find((p) => p.id === tenant.propertyId);
-            const ini = initials(tenant.name);
-            const isUrgent = tenant.paymentStatus === "Vencido" || tenant.paymentStatus === "Revisión";
+          ) : (
+            <>
+              <div className="hidden sm:grid grid-cols-[52px_1fr_136px_116px] gap-0 border-b border-slate-100 px-6 py-2">
+                {["DÍA", "INQUILINO · PROPIEDAD", "MONTO", "ESTADO"].map((h, i) => (
+                  <span
+                    key={i}
+                    className={cn(
+                      "text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400",
+                      i === 2 && "text-right"
+                    )}
+                  >
+                    {h}
+                  </span>
+                ))}
+              </div>
 
-            return (
-              <div
-                key={tenant.id}
-                className={cn(
-                  "border-b border-slate-50 last:border-0 transition-colors",
-                  isUrgent ? "hover:bg-red-50/30" : "hover:bg-slate-50/60"
-                )}
-              >
-                {/* Mobile */}
-                <div className="flex items-center gap-3 px-4 py-3.5 sm:hidden">
-                  <div className={cn(
-                    "w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0",
-                    tenant.paymentStatus === "Pagado" ? "bg-emerald-50 text-emerald-700" :
-                    tenant.paymentStatus === "Vencido" ? "bg-red-50 text-red-600" :
-                    "bg-[#eef1fd] text-[#2952F3]"
-                  )}>
-                    {ini}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-semibold text-[#0B1426] truncate">{tenant.name}</p>
-                    <p className="text-[11px] text-slate-400">{property?.name ?? "—"}</p>
-                  </div>
-                  <div className="flex flex-col items-end gap-1.5 shrink-0">
-                    {tenant.monthlyAmount && (
-                      <span className="text-[13px] font-semibold text-[#0B1426] tabular-nums">
-                        {formatCurrency(Number(tenant.monthlyAmount))}
+              <div className="divide-y divide-slate-50">
+                {movimientosRows.map((row) => (
+                  <div key={row.key}>
+                    {/* Desktop row */}
+                    <div className="hidden sm:grid grid-cols-[52px_1fr_136px_116px] items-center px-6 py-3.5 hover:bg-slate-50/50 transition-colors">
+                      <span className="text-[13px] font-bold text-slate-400 tabular-nums">
+                        {row.day != null ? String(row.day).padStart(2, "0") : "—"}
                       </span>
-                    )}
-                    <PaymentStatusBadge status={tenant.paymentStatus} />
-                  </div>
-                </div>
-
-                {/* Desktop */}
-                <div className="hidden sm:grid grid-cols-[1fr_130px_110px_80px] items-center px-6 py-3.5">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className={cn(
-                      "w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0",
-                      tenant.paymentStatus === "Pagado" ? "bg-emerald-50 text-emerald-700" :
-                      tenant.paymentStatus === "Vencido" ? "bg-red-50 text-red-600" :
-                      "bg-[#eef1fd] text-[#2952F3]"
-                    )}>
-                      {ini}
+                      <div className="min-w-0 pr-4">
+                        <p className="text-[13px] font-semibold text-[#0B1426] truncate">{row.tenantName}</p>
+                        <p className="text-[11px] text-slate-400 truncate">{row.propertyName}</p>
+                      </div>
+                      <span className="text-[13px] font-semibold text-[#0B1426] tabular-nums text-right">
+                        {formatCurrency(row.amount).replace(/\.\d+$/, "")}
+                      </span>
+                      <div className="pl-2">
+                        <MovimientosBadge status={row.status} />
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-[13px] font-semibold text-[#0B1426] truncate">{tenant.name}</p>
-                      <p className="text-[11px] text-slate-400 truncate">
-                        {property?.name ?? "—"}{tenant.paymentDay ? ` · Día ${tenant.paymentDay}` : ""}
-                      </p>
+
+                    {/* Mobile row */}
+                    <div className="flex sm:hidden items-center gap-3 px-4 py-3.5">
+                      <span className="text-[12px] font-bold text-slate-400 tabular-nums w-7 shrink-0">
+                        {row.day != null ? String(row.day).padStart(2, "0") : "—"}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-semibold text-[#0B1426] truncate">{row.tenantName}</p>
+                        <p className="text-[11px] text-slate-400 truncate">{row.propertyName}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-[12px] font-bold text-[#0B1426] tabular-nums mb-0.5">
+                          {formatCurrency(row.amount).replace(/\.\d+$/, "")}
+                        </p>
+                        <MovimientosBadge status={row.status} />
+                      </div>
                     </div>
-                  </div>
-                  <span className="text-[13px] font-semibold text-[#0B1426] text-right tabular-nums">
-                    {tenant.monthlyAmount ? formatCurrency(Number(tenant.monthlyAmount)) : "—"}
-                  </span>
-                  <div className="flex justify-center">
-                    <PaymentStatusBadge status={tenant.paymentStatus} />
-                  </div>
-                  <div className="flex justify-center">
-                    {tenant.paymentStatus !== "Pagado" && (
-                      <Link href="/recordatorios">
-                        <button className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-[#2952F3] hover:bg-[#eef1fd] transition-colors">
-                          <Send className="w-3.5 h-3.5" />
-                        </button>
-                      </Link>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-
-          {/* Footer */}
-          {sortedTenants.length > 0 && (
-            <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 bg-slate-50/60 border-t border-slate-100">
-              <div className="flex items-center gap-3">
-                <span className="inline-flex items-center gap-1.5 text-[12px] text-emerald-600 font-medium">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  {cobradoCount} pagado{cobradoCount !== 1 ? "s" : ""}
-                </span>
-                {(pendienteCount + vencidoCount) > 0 && (
-                  <span className="text-[12px] text-slate-400">
-                    · {pendienteCount + vencidoCount} pendiente{(pendienteCount + vencidoCount) !== 1 ? "s" : ""}
-                  </span>
-                )}
-              </div>
-              <span className="text-[13px] font-bold text-[#0B1426] tabular-nums">
-                {formatCurrency(totalCobrado)}
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Columna derecha */}
-        <div className="flex flex-col gap-5">
-
-          {/* Gráfica */}
-          <div
-            className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden"
-            style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
-          >
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-              <h2 className="text-[14px] font-semibold text-[#0B1426]">Cobranza mensual</h2>
-              <span className="text-[11px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">
-                2026
-              </span>
-            </div>
-            <div className="px-3 pt-5 pb-3">
-              <ResponsiveContainer width="100%" height={120}>
-                <BarChart data={monthlyData} barCategoryGap="34%" margin={{ top: 0, right: 4, left: 4, bottom: 0 }}>
-                  <XAxis dataKey="m" tick={{ fontSize: 10, fill: "#94a3b8" }} tickLine={false} axisLine={false} />
-                  <Tooltip
-                    formatter={(v) => [formatCurrency(Number(v ?? 0)), "Cobrado"]}
-                    contentStyle={{ fontSize: 12, borderRadius: 10, border: "1px solid #e2e8f0", boxShadow: "0 8px 24px rgba(0,0,0,0.08)", padding: "6px 12px" }}
-                    cursor={{ fill: "#f8fafc", radius: 4 }}
-                  />
-                  <Bar
-                    dataKey="v"
-                    maxBarSize={16}
-                    minPointSize={4}
-                    shape={(props: { x?: number; y?: number; width?: number; height?: number; payload?: { current?: boolean; v: number } }) => {
-                      const { x = 0, y = 0, width = 0, height = 0, payload } = props;
-                      const fill = payload?.current ? "#10b981" : (payload?.v ?? 0) > 0 ? "#2952F3" : "#f1f5f9";
-                      return <rect x={x} y={y} width={Math.max(0, width)} height={Math.max(0, height)} fill={fill} rx={3} ry={3} />;
-                    }}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Calendario */}
-          <div
-            className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden flex-1"
-            style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)" }}
-          >
-            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-              <h2 className="text-[14px] font-semibold text-[#0B1426]">Pagos del mes</h2>
-              <span className="text-[12px] text-slate-400 capitalize">
-                {now.toLocaleDateString("es-MX", { month: "short" })}
-              </span>
-            </div>
-            <div className="px-4 pt-3 pb-4">
-              <div className="grid grid-cols-7 mb-2">
-                {WEEK_DAYS.map((d, i) => (
-                  <div key={i} className="text-center text-[10px] font-bold tracking-wider text-slate-300 py-1">
-                    {d}
                   </div>
                 ))}
               </div>
-              <div className="grid grid-cols-7 gap-1">
-                {calendar.map((day, i) => {
-                  if (day === null) return <div key={i} />;
-                  const isPaid  = paidDays.has(day);
-                  const isToday = day === today;
-                  return (
-                    <div
-                      key={i}
-                      className={cn(
-                        "aspect-square flex items-center justify-center text-[11px] font-medium rounded-lg select-none transition-all",
-                        isPaid  && "bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold",
-                        !isPaid && !isToday && "text-slate-400 hover:bg-slate-100",
-                        isToday && "ring-2 ring-[#2952F3] ring-offset-1 bg-[#2952F3]/5 font-bold text-[#2952F3]"
-                      )}
-                    >
-                      {day}
-                    </div>
-                  );
-                })}
+
+              <div className="flex items-center justify-between px-5 sm:px-6 py-3 border-t border-slate-100 bg-slate-50/40">
+                <Link
+                  href="/pagos"
+                  className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400 hover:text-[#2952F3] transition-colors"
+                >
+                  Ver todos los pagos
+                  <ArrowRight className="w-2.5 h-2.5" />
+                </Link>
+                <span className="text-[11px] font-bold text-[#0B1426] tabular-nums">
+                  TOTAL · {formatCurrency(movimientosTotal).replace(/\.\d+$/, "")}
+                </span>
               </div>
-              <div className="flex items-center gap-4 mt-3 pt-3 border-t border-slate-100">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-sm bg-emerald-50 border border-emerald-200" />
-                  <span className="text-[11px] text-slate-400">Pago recibido</span>
-                </div>
-                <div className="flex items-center gap-1.5 ml-auto">
-                  <span className="w-2.5 h-2.5 rounded-sm border-2 border-[#2952F3]" />
-                  <span className="text-[11px] text-slate-400">Hoy</span>
-                </div>
+            </>
+          )}
+        </div>
+
+        {/* ── Right panel ───────────────────────────────────────────────────── */}
+        <div className="border-t xl:border-t-0 xl:border-l border-slate-100 flex flex-col">
+
+          {/* Bar chart */}
+          <div className="p-5 border-b border-slate-100">
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
+                Cobranza por mes
+              </span>
+              <span className="text-[10px] font-semibold text-slate-400">
+                {now.getFullYear()} YTD
+              </span>
+            </div>
+            <ResponsiveContainer width="100%" height={120}>
+              <BarChart
+                data={monthlyData}
+                barSize={13}
+                margin={{ top: 4, right: 0, left: -24, bottom: 0 }}
+              >
+                <XAxis
+                  dataKey="m"
+                  tick={{ fontSize: 8, fill: "#94a3b8" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis hide domain={[0, "auto"]} />
+                <Tooltip
+                  formatter={(v) => [formatCurrency(Number(v)), "Cobrado"]}
+                  contentStyle={{
+                    fontSize: 11,
+                    borderRadius: 8,
+                    border: "1px solid #e2e8f0",
+                    padding: "4px 10px",
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                  }}
+                  cursor={{ fill: "#f8fafc" }}
+                />
+                <Bar dataKey="v" radius={[3, 3, 0, 0]}>
+                  {monthlyData.map((entry) => (
+                    <Cell
+                      key={entry.idx}
+                      fill={
+                        entry.idx === now.getMonth()
+                          ? "#10b981"
+                          : entry.idx > now.getMonth()
+                          ? "#e2e8f0"
+                          : "#2952F3"
+                      }
+                      fillOpacity={
+                        entry.idx > now.getMonth()
+                          ? 1
+                          : entry.idx === now.getMonth()
+                          ? 1
+                          : 0.55 + (entry.idx / Math.max(now.getMonth(), 1)) * 0.35
+                      }
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Calendar */}
+          <div className="p-5 flex-1">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
+                Vencimientos de {MONTH_LABELS[now.getMonth()].toLowerCase()}
+              </span>
+              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
+                Recordatorios automáticos
+              </span>
+            </div>
+            <CalendarGrid tenants={tenantsWithStatus} now={now} />
+            <div className="flex items-center gap-4 mt-3">
+              <div className="flex items-center gap-1.5">
+                <div className="w-2.5 h-2.5 rounded-sm bg-emerald-100 border border-emerald-200" />
+                <span className="text-[10px] text-slate-400">Cobrado</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-2.5 h-2.5 rounded-sm bg-amber-100 border border-amber-200" />
+                <span className="text-[10px] text-slate-400">Pendiente</span>
               </div>
             </div>
           </div>

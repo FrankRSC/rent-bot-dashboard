@@ -1,22 +1,23 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore, useEffect, useReducer } from "react";
 import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
 import {
   Building2, Users, CheckCircle2, ChevronRight, ChevronLeft, X, Loader2,
-  Bell, BarChart2, MessageCircle, FileText, Settings, LayoutDashboard,
-  ShieldCheck, HandCoins, Zap,
+  Bell, BarChart2, MessageCircle, ShieldCheck, Map, Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useStore } from "@/store/useStore";
 import * as api from "@/lib/api";
+import { apiError } from "@/lib/api-error";
 import { cn } from "@/lib/utils";
 
-const STORAGE_KEY = "rc_onboarding_v1";
+const STORAGE_KEY_PREFIX = "rc_onboarding_v1";
 
-type WizardStep = "welcome" | "setup" | "tour-pagos" | "tour-reminders" | "tour-more" | "done";
-const STEPS: WizardStep[] = ["welcome", "setup", "tour-pagos", "tour-reminders", "tour-more", "done"];
+type WizardStep = "welcome" | "setup" | "done";
+const STEPS: WizardStep[] = ["welcome", "setup", "done"];
 
 // ── Utilidades de presentación ─────────────────────────────────────────────────
 
@@ -55,7 +56,7 @@ function WelcomeStep({ onNext }: { onNext: () => void }) {
     <div className="flex flex-col flex-1">
       <StepIcon icon={Building2} bg="bg-[#eef1fd]" color="text-[#2952F3]" />
       <h1 className="text-[26px] font-bold text-[#0B1426] leading-tight mb-3">
-        Bienvenido a<br />Rent Collector
+        Bienvenido a<br />Rentals
       </h1>
       <p className="text-[15px] text-slate-500 leading-relaxed mb-8">
         Todo lo que necesitas para cobrar rentas y dar seguimiento a tus inquilinos, desde WhatsApp hasta reportes.
@@ -193,181 +194,8 @@ function SetupStep({
             : <>Crear propiedad e inquilino <ChevronRight className="w-4 h-4 ml-1" /></>}
         </Button>
         <button onClick={onSkip} className="text-[13px] text-slate-400 hover:text-slate-600 transition-colors text-center py-1">
-          Lo hago después, mostrar el tour
+          Lo hago después
         </button>
-      </div>
-    </div>
-  );
-}
-
-// ── Pasos de tour ─────────────────────────────────────────────────────────────
-
-function TourPagosStep({ onNext, onPrev }: { onNext: () => void; onPrev: () => void }) {
-  return (
-    <div className="flex flex-col flex-1">
-      <StepIcon icon={MessageCircle} bg="bg-blue-50" color="text-blue-600" />
-      <h2 className="text-[22px] font-bold text-[#0B1426] leading-tight mb-2">Pagos y comprobantes</h2>
-      <p className="text-[14px] text-slate-400 mb-6 leading-relaxed">
-        Aquí vive el corazón del sistema. Cada comprobante que un inquilino envía por WhatsApp aparece aquí para que lo revises.
-      </p>
-
-      <div className="space-y-3 mb-8">
-        {[
-          { icon: MessageCircle, label: "El inquilino manda foto de su comprobante al bot de WhatsApp" },
-          { icon: Zap,           label: "El bot lee el monto, banco y clave de rastreo con OCR automático" },
-          { icon: ShieldCheck,   label: "Se verifica contra Banxico (CEP). Si coincide, queda como Verificado" },
-          { icon: HandCoins,     label: "También puedes registrar pagos en efectivo o transferencia a mano" },
-        ].map(({ icon: Icon, label }, i) => (
-          <div key={i} className="flex items-start gap-3">
-            <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center shrink-0 mt-0.5">
-              <Icon className="w-3.5 h-3.5 text-blue-600" />
-            </div>
-            <p className="text-[14px] text-slate-600 leading-snug">{label}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="bg-slate-50 rounded-2xl px-4 py-3 mb-6 border border-slate-100">
-        <p className="text-[12px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Estados de un pago</p>
-        <div className="flex flex-wrap gap-2">
-          {[
-            { label: "Verificado", color: "text-emerald-700 bg-emerald-50 border-emerald-200" },
-            { label: "Pendiente",  color: "text-amber-700 bg-amber-50 border-amber-200" },
-            { label: "Revisión",   color: "text-purple-700 bg-purple-50 border-purple-200" },
-            { label: "Rechazado",  color: "text-red-700 bg-red-50 border-red-200" },
-          ].map(({ label, color }) => (
-            <span key={label} className={cn("text-[11px] font-semibold rounded-full px-2.5 py-0.5 border", color)}>{label}</span>
-          ))}
-        </div>
-      </div>
-
-      <div className="mt-auto flex gap-3">
-        <Button variant="outline" className="flex-1 h-11" onClick={onPrev}>
-          <ChevronLeft className="w-4 h-4 mr-1" /> Anterior
-        </Button>
-        <Button className="flex-1 h-11 bg-[#2952F3] hover:bg-[#1e3fd4] font-semibold" onClick={onNext}>
-          Siguiente <ChevronRight className="w-4 h-4 ml-1" />
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function TourRemindersStep({ onNext, onPrev }: { onNext: () => void; onPrev: () => void }) {
-  return (
-    <div className="flex flex-col flex-1">
-      <StepIcon icon={Bell} bg="bg-amber-50" color="text-amber-500" />
-      <h2 className="text-[22px] font-bold text-[#0B1426] leading-tight mb-2">Recordatorios automáticos</h2>
-      <p className="text-[14px] text-slate-400 mb-6 leading-relaxed">
-        El bot avisa a tus inquilinos sin que tú tengas que hacer nada. Tú controlas cuándo y cómo.
-      </p>
-
-      <div className="space-y-4 mb-8">
-        <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4">
-          <p className="text-[13px] font-semibold text-amber-800 mb-2">¿Cuándo manda recordatorios?</p>
-          <div className="space-y-2">
-            {[
-              "Antes del día de pago (configurable: 1–28 días de anticipación)",
-              "El mismo día de vencimiento si aún no ha pagado",
-              "Días después del vencimiento si sigue sin pagar",
-            ].map((text, i) => (
-              <div key={i} className="flex items-start gap-2">
-                <div className="w-4 h-4 rounded-full bg-amber-200 text-amber-800 flex items-center justify-center text-[9px] font-bold shrink-0 mt-0.5">{i + 1}</div>
-                <p className="text-[13px] text-amber-700 leading-snug">{text}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          {[
-            { icon: Settings, text: "Configura los días de anticipación en Recordatorios → Ajustes" },
-            { icon: Bell,     text: "Activa o desactiva los automáticos sin perder la configuración" },
-            { icon: Users,    text: "También puedes enviar un recordatorio manual a cualquier inquilino" },
-          ].map(({ icon: Icon, text }, i) => (
-            <div key={i} className="flex items-start gap-3">
-              <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center shrink-0 mt-0.5">
-                <Icon className="w-3.5 h-3.5 text-slate-500" />
-              </div>
-              <p className="text-[14px] text-slate-600 leading-snug">{text}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="mt-auto flex gap-3">
-        <Button variant="outline" className="flex-1 h-11" onClick={onPrev}>
-          <ChevronLeft className="w-4 h-4 mr-1" /> Anterior
-        </Button>
-        <Button className="flex-1 h-11 bg-[#2952F3] hover:bg-[#1e3fd4] font-semibold" onClick={onNext}>
-          Siguiente <ChevronRight className="w-4 h-4 ml-1" />
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function TourMoreStep({ onNext, onPrev }: { onNext: () => void; onPrev: () => void }) {
-  return (
-    <div className="flex flex-col flex-1">
-      <StepIcon icon={LayoutDashboard} bg="bg-[#eef1fd]" color="text-[#2952F3]" />
-      <h2 className="text-[22px] font-bold text-[#0B1426] leading-tight mb-2">Todo el sistema de un vistazo</h2>
-      <p className="text-[14px] text-slate-400 mb-6 leading-relaxed">
-        Cada sección del menú lateral tiene su propósito. Aquí un mapa rápido.
-      </p>
-
-      <div className="space-y-2.5 mb-8">
-        {[
-          {
-            icon: LayoutDashboard, color: "bg-[#eef1fd] text-[#2952F3]",
-            section: "Dashboard",
-            desc: "Resumen del mes: tasa de cobro, inquilinos al corriente y pendientes, tendencia mensual",
-          },
-          {
-            icon: HandCoins, color: "bg-emerald-50 text-emerald-600",
-            section: "Pagos",
-            desc: "Historial completo de comprobantes. Filtra por estado, inquilino o periodo. Sube comprobantes manuales",
-          },
-          {
-            icon: Bell, color: "bg-amber-50 text-amber-500",
-            section: "Recordatorios",
-            desc: "Ve quién ha recibido aviso este mes y envía recordatorios manuales al instante",
-          },
-          {
-            icon: BarChart2, color: "bg-purple-50 text-purple-600",
-            section: "Reportes",
-            desc: "Análisis mensual por propiedad e inquilino. Navega meses anteriores para comparar",
-          },
-          {
-            icon: FileText, color: "bg-blue-50 text-blue-600",
-            section: "Facturas",
-            desc: "Próximamente disponible en tu cuenta",
-          },
-          {
-            icon: Settings, color: "bg-slate-100 text-slate-500",
-            section: "Configuración",
-            desc: "Datos bancarios, datos fiscales para facturas, notificaciones y gestión del bot",
-          },
-        ].map(({ icon: Icon, color, section, desc }) => (
-          <div key={section} className="flex items-start gap-3 bg-slate-50 rounded-xl p-3">
-            <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5", color)}>
-              <Icon className="w-4 h-4" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[13px] font-semibold text-[#0B1426]">{section}</p>
-              <p className="text-[12px] text-slate-400 mt-0.5 leading-snug">{desc}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-auto flex gap-3">
-        <Button variant="outline" className="flex-1 h-11" onClick={onPrev}>
-          <ChevronLeft className="w-4 h-4 mr-1" /> Anterior
-        </Button>
-        <Button className="flex-1 h-11 bg-[#2952F3] hover:bg-[#1e3fd4] font-semibold" onClick={onNext}>
-          Ver resumen final <ChevronRight className="w-4 h-4 ml-1" />
-        </Button>
       </div>
     </div>
   );
@@ -376,9 +204,10 @@ function TourMoreStep({ onNext, onPrev }: { onNext: () => void; onPrev: () => vo
 // ── Paso final: ¡Listo! ────────────────────────────────────────────────────────
 
 function DoneStep({
-  propertyName, tenantName, onFinish,
+  propertyName, tenantName, onFinish, onStartTour,
 }: {
-  propertyName: string; tenantName: string; onFinish: () => void;
+  propertyName: string; tenantName: string;
+  onFinish: () => void; onStartTour: () => void;
 }) {
   return (
     <div className="flex flex-col flex-1 items-center text-center">
@@ -394,13 +223,12 @@ function DoneStep({
         )}
       </p>
 
-      <div className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 mb-8 text-left">
+      <div className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 mb-6 text-left">
         <p className="text-[12px] font-semibold text-slate-500 uppercase tracking-wide mb-3">Tus próximos pasos</p>
         <div className="space-y-2.5">
           {[
             "Comparte el número de WhatsApp del bot con tus inquilinos",
-            "Agrega más propiedades e inquilinos desde el menú de Propiedades",
-            "Configura tus datos fiscales en Configuración para emitir facturas",
+            "Agrega más propiedades e inquilinos desde Propiedades",
             "Ajusta los días de anticipación de recordatorios a tu gusto",
           ].map((text, i) => (
             <div key={i} className="flex items-start gap-2.5">
@@ -412,12 +240,269 @@ function DoneStep({
       </div>
 
       <Button
-        className="w-full bg-[#2952F3] hover:bg-[#1e3fd4] h-12 text-[15px] font-semibold"
-        onClick={onFinish}
+        className="w-full bg-[#2952F3] hover:bg-[#1e3fd4] h-12 text-[15px] font-semibold mb-3"
+        onClick={onStartTour}
       >
-        Ir al dashboard
+        <Map className="w-4 h-4 mr-2" /> Ver tour del sistema
       </Button>
+      <button
+        onClick={onFinish}
+        className="text-[13px] text-slate-400 hover:text-slate-600 transition-colors py-1"
+      >
+        Ir al dashboard sin tour
+      </button>
     </div>
+  );
+}
+
+// ── Tour interactivo del sidebar ───────────────────────────────────────────────
+
+const PAYMENT_STATUSES = [
+  { label: "Verificado", color: "text-emerald-700 bg-emerald-50 border-emerald-200" },
+  { label: "Pendiente",  color: "text-amber-700 bg-amber-50 border-amber-200" },
+  { label: "Revisión",   color: "text-purple-700 bg-purple-50 border-purple-200" },
+] as const;
+
+const TOUR_STEPS = [
+  {
+    selector: '[data-tour="nav-dashboard"]',
+    href: "/dashboard",
+    title: "Dashboard",
+    subtitle: "Resumen mensual",
+    desc: "Vista general del mes en curso: tasa de cobro, estado de pago por inquilino y últimos comprobantes registrados.",
+    bullets: [
+      "Tasa de cobro del mes en porcentaje",
+      "Estado de pago por inquilino",
+      "Últimos comprobantes registrados",
+    ],
+    showStatuses: false,
+  },
+  {
+    selector: '[data-tour="nav-propiedades"]',
+    href: "/propiedades",
+    title: "Propiedades",
+    subtitle: "Inmuebles e inquilinos",
+    desc: "Alta, edición y eliminación de propiedades e inquilinos. Consulta el estado de pago por propiedad.",
+    bullets: [
+      "Alta de propiedades e inquilinos",
+      "Estado de pago por propiedad",
+      "Edición de datos: renta, día de pago y teléfono",
+    ],
+    showStatuses: false,
+  },
+  {
+    selector: '[data-tour="nav-pagos"]',
+    href: "/pagos",
+    title: "Pagos",
+    subtitle: "Comprobantes de pago",
+    desc: "Cada comprobante enviado por WhatsApp aparece aquí. El bot verifica el pago de forma automática.",
+    bullets: [
+      "El inquilino envía su comprobante al bot de WhatsApp",
+      "El bot lee el monto, banco y referencia del comprobante",
+      "La verificación es automática y en tiempo real",
+      "Registro manual disponible para efectivo o depósito",
+    ],
+    showStatuses: true,
+  },
+  {
+    selector: '[data-tour="nav-reportes"]',
+    href: "/reportes",
+    title: "Reportes",
+    subtitle: "Análisis de cobros",
+    desc: "Análisis mensual de cobros por propiedad e inquilino. Consulta y compara periodos anteriores.",
+    bullets: [
+      "Cobros del mes por propiedad e inquilino",
+      "Navegación entre periodos anteriores",
+      "Estado de pago por inquilino en el periodo seleccionado",
+    ],
+    showStatuses: false,
+  },
+  {
+    selector: '[data-tour="nav-recordatorios"]',
+    href: "/recordatorios",
+    title: "Recordatorios",
+    subtitle: "Avisos de pago",
+    desc: "El sistema notifica a los inquilinos antes y después de la fecha de pago. Los avisos manuales también están disponibles.",
+    bullets: [
+      "Notificación automática antes del vencimiento",
+      "Aviso el día de vencimiento si el pago no está registrado",
+      "Envío manual a cualquier inquilino",
+    ],
+    showStatuses: false,
+  },
+  {
+    selector: '[data-tour="nav-configuracion"]',
+    href: "/configuracion",
+    title: "Configuración",
+    subtitle: "Cuenta y preferencias",
+    desc: "Datos bancarios, información de cuenta y preferencias de notificación.",
+    bullets: [
+      "Datos bancarios: CLABE, tarjeta o cuenta",
+      "Perfil de cuenta: nombre, teléfono y correo",
+      "Activación y configuración de recordatorios automáticos",
+    ],
+    showStatuses: false,
+  },
+];
+
+export function TourOverlay({ onDone }: { onDone: () => void }) {
+  const [step, setStep] = useState(0);
+  const [, rerender] = useReducer((n: number) => n + 1, 0);
+  const router = useRouter();
+
+  // Navega a la sección del paso actual para mostrar la página real debajo del overlay
+  useEffect(() => {
+    router.push(TOUR_STEPS[step].href);
+  }, [step, router]);
+
+  useEffect(() => {
+    const onResize = () => rerender();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  // Calcula el rect del elemento destacado durante el render (componente solo cliente)
+  const el = typeof document !== "undefined"
+    ? document.querySelector(TOUR_STEPS[step].selector)
+    : null;
+  const rect = el ? el.getBoundingClientRect() : null;
+
+  const current = TOUR_STEPS[step];
+  const total = TOUR_STEPS.length;
+  const sidebarVisible = !!rect && rect.width > 0 && rect.left >= 0;
+
+  // Posiciona el tooltip a la derecha del sidebar; centrado en pantalla si no hay sidebar
+  const tooltipTop = sidebarVisible
+    ? Math.max(Math.min(rect!.top + rect!.height / 2 - 130, window.innerHeight - 320), 12)
+    : undefined;
+  const tooltipStyle: React.CSSProperties = sidebarVisible
+    ? { left: rect!.right + 18, top: tooltipTop }
+    : { top: "50%", left: "50%", transform: "translate(-50%, -50%)" };
+
+  return createPortal(
+    <>
+      {/* Overlay oscuro con hueco sobre el elemento activo del sidebar */}
+      <svg
+        className="fixed inset-0 z-[200] pointer-events-none"
+        style={{ width: "100vw", height: "100vh" }}
+        aria-hidden
+      >
+        <defs>
+          <mask id="tour-mask">
+            <rect width="100%" height="100%" fill="white" />
+            {sidebarVisible && (
+              <rect
+                x={rect!.left - 6} y={rect!.top - 6}
+                width={rect!.width + 12} height={rect!.height + 12}
+                rx="10" fill="black"
+              />
+            )}
+          </mask>
+        </defs>
+        <rect width="100%" height="100%" fill="rgba(0,0,0,0.62)" mask="url(#tour-mask)" />
+        {sidebarVisible && (
+          <rect
+            x={rect!.left - 6} y={rect!.top - 6}
+            width={rect!.width + 12} height={rect!.height + 12}
+            rx="10" fill="none" stroke="#2952F3" strokeWidth="2.5"
+          />
+        )}
+      </svg>
+
+      {/* Tarjeta de descripción */}
+      <div
+        className="fixed z-[201] w-80 bg-white rounded-2xl overflow-hidden"
+        style={{ boxShadow: "0 8px 40px rgba(0,0,0,0.22)", ...tooltipStyle }}
+      >
+        {/* Flecha hacia el sidebar */}
+        {sidebarVisible && (
+          <div className="absolute top-[50%] -translate-y-1/2 -left-3 w-0 h-0 border-y-[10px] border-y-transparent border-r-[12px] border-r-white" />
+        )}
+
+        {/* Header azul */}
+        <div className="bg-[#2952F3] px-5 pt-4 pb-5">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex gap-1">
+              {Array.from({ length: total }).map((_, i) => (
+                <div
+                  key={i}
+                  className={cn(
+                    "rounded-full transition-all duration-300",
+                    i === step ? "w-5 h-1.5 bg-white" : i < step ? "w-1.5 h-1.5 bg-white/40" : "w-1.5 h-1.5 bg-white/20"
+                  )}
+                />
+              ))}
+            </div>
+            <button
+              onClick={onDone}
+              className="text-white/50 hover:text-white transition-colors"
+              aria-label="Cerrar tour"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <p className="text-[11px] font-semibold text-white/60 uppercase tracking-wider mb-0.5">{current.subtitle}</p>
+          <p className="text-[20px] font-bold text-white leading-tight">{current.title}</p>
+        </div>
+
+        {/* Cuerpo */}
+        <div className="px-5 py-4">
+          <p className="text-[13px] text-slate-500 leading-relaxed mb-4">{current.desc}</p>
+
+          <div className="space-y-2 mb-4">
+            {current.bullets.map((b, i) => (
+              <div key={i} className="flex items-start gap-2.5">
+                <div className="w-4 h-4 rounded-full bg-[#eef1fd] flex items-center justify-center shrink-0 mt-0.5">
+                  <Check className="w-2.5 h-2.5 text-[#2952F3]" />
+                </div>
+                <p className="text-[13px] text-slate-600 leading-snug">{b}</p>
+              </div>
+            ))}
+          </div>
+
+          {current.showStatuses && (
+            <div className="border-t border-slate-100 pt-3 mb-4">
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-2">Estados de un pago</p>
+              <div className="flex flex-wrap gap-1.5">
+                {PAYMENT_STATUSES.map(({ label, color }) => (
+                  <span key={label} className={cn("text-[11px] font-semibold rounded-full px-2.5 py-0.5 border", color)}>{label}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            {step > 0 && (
+              <Button
+                variant="outline" size="sm"
+                className="flex-1 h-9 text-[13px]"
+                onClick={() => setStep(s => s - 1)}
+              >
+                <ChevronLeft className="w-3.5 h-3.5 mr-1" /> Anterior
+              </Button>
+            )}
+            {step < total - 1 ? (
+              <Button
+                size="sm"
+                className="flex-1 h-9 text-[13px] bg-[#2952F3] hover:bg-[#1e3fd4]"
+                onClick={() => setStep(s => s + 1)}
+              >
+                Siguiente <ChevronRight className="w-3.5 h-3.5 ml-1" />
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                className="flex-1 h-9 text-[13px] bg-emerald-600 hover:bg-emerald-700"
+                onClick={onDone}
+              >
+                Finalizar tour
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+    </>,
+    document.body
   );
 }
 
@@ -426,14 +511,19 @@ function DoneStep({
 export function OnboardingWizard() {
   const {
     properties, propertiesState, landlordId, isAdmin, impersonatedBy,
-    fetchProperties, fetchAllTenants,
+    fetchProperties, fetchAllTenants, setTourActive,
   } = useStore();
+
+  // La marca de "ya visto" es por arrendador: sin esto, un dispositivo que
+  // probó el onboarding con una cuenta lo oculta para siempre a cualquier
+  // otra cuenta que inicie sesión en el mismo navegador.
+  const storageKey = `${STORAGE_KEY_PREFIX}_${landlordId}`;
 
   // useSyncExternalStore garantiza que servidor y cliente arranquen con el mismo
   // valor (true = dismissed), evitando el hydration mismatch de typeof window.
   const storeDismissed = useSyncExternalStore(
     () => () => {},
-    () => !!localStorage.getItem(STORAGE_KEY),
+    () => !!localStorage.getItem(storageKey),
     () => true,
   );
   const [localDismissed, setLocalDismissed] = useState(false);
@@ -459,11 +549,17 @@ export function OnboardingWizard() {
     !propertiesState.loading &&
     properties.length === 0;
 
+  if (typeof document === "undefined") return null;
   if (!shouldShow) return null;
 
   const dismiss = (completed = false) => {
-    localStorage.setItem(STORAGE_KEY, completed ? "completed" : "skipped");
+    localStorage.setItem(storageKey, completed ? "completed" : "skipped");
     setLocalDismissed(true);
+  };
+
+  const startTour = () => {
+    dismiss(true);
+    setTourActive(true);
   };
 
   const handleSetup = async () => {
@@ -483,9 +579,11 @@ export function OnboardingWizard() {
       });
       setCreatedTenantName(tenantName.trim());
       await Promise.all([fetchProperties(), fetchAllTenants()]);
-      setStep("tour-pagos");
+      setStep("done");
     } catch (e) {
-      setError((e as Error).message);
+      // apiError y no `e.message`: con el tope de plan (§2.10) esto puede ser un
+      // 409 cuyo texto el arrendador debe leer, no el JSON crudo del backend.
+      setError(apiError(e, "No se pudo completar la configuración. Inténtalo de nuevo."));
     } finally {
       setLoading(false);
     }
@@ -529,31 +627,22 @@ export function OnboardingWizard() {
             amount={amount} setAmount={setAmount}
             day={day} setDay={setDay}
             onNext={handleSetup}
-            onSkip={() => setStep("tour-pagos")}
+            onSkip={() => setStep("done")}
             loading={loading}
             error={error}
           />
-        )}
-        {step === "tour-pagos" && (
-          <TourPagosStep onNext={() => setStep("tour-reminders")} onPrev={() => setStep("setup")} />
-        )}
-        {step === "tour-reminders" && (
-          <TourRemindersStep onNext={() => setStep("tour-more")} onPrev={() => setStep("tour-pagos")} />
-        )}
-        {step === "tour-more" && (
-          <TourMoreStep onNext={() => setStep("done")} onPrev={() => setStep("tour-reminders")} />
         )}
         {step === "done" && (
           <DoneStep
             propertyName={createdPropertyName}
             tenantName={createdTenantName}
             onFinish={() => dismiss(true)}
+            onStartTour={startTour}
           />
         )}
       </div>
     </div>
   );
 
-  if (typeof document === "undefined") return null;
   return createPortal(content, document.body);
 }

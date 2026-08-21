@@ -20,7 +20,7 @@ test.describe("Configuración", () => {
       const patch = page.waitForRequest(
         (r) =>
           r.method() === "PATCH" &&
-          /\/landlords\/\d+$/.test(new URL(r.url()).pathname.replace(/^\/api/, ""))
+          /\/landlords\/[^/]+$/.test(new URL(r.url()).pathname.replace(/^\/api/, ""))
       );
       await toggle.click();
       const request = await patch;

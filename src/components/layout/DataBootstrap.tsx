@@ -9,7 +9,7 @@ export function DataBootstrap() {
   const authReady = useStore((s) => s.authReady);
   const {
     fetchProperties, fetchAllTenants, fetchPayments,
-    fetchLandlordSettings, checkHealth,
+    fetchLandlordSettings, fetchSubscription, checkHealth,
   } = useStore();
 
   useEffect(() => {
@@ -22,6 +22,7 @@ export function DataBootstrap() {
       fetchAllTenants();
       fetchPayments();
       fetchLandlordSettings();
+      fetchSubscription();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authReady]);

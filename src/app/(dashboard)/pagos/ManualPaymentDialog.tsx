@@ -90,7 +90,7 @@ export function ManualPaymentDialog({ open, onClose }: { open: boolean; onClose:
     if (!open || !tenantId || !/^\d{4}-\d{2}$/.test(billingPeriod)) return;
     let cancelled = false;
     api
-      .getPeriodBalance(parseInt(tenantId, 10), billingPeriod)
+      .getPeriodBalance(tenantId, billingPeriod)
       .then((b) => {
         if (!cancelled) setBalanceHint(b);
       })
@@ -121,7 +121,7 @@ export function ManualPaymentDialog({ open, onClose }: { open: boolean; onClose:
     setError(null);
     try {
       const { balance } = await api.registerManualPayment({
-        tenantId: parseInt(tenantId, 10),
+        tenantId,
         amount: amountNum,
         paymentMethod: method,
         paymentDate: paymentDate || undefined,
