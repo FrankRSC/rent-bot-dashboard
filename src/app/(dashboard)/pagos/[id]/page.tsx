@@ -46,9 +46,24 @@ function isPrimitive(v: unknown): v is string | number | boolean {
   return v !== null && v !== undefined && v !== "" && typeof v !== "object";
 }
 
+/**
+ * Campos que se muestran como moneda. `expectedAmount` llega como number, pero
+ * `monto` **llega como string en producción** (`"19500.00"`) y como number en datos
+ * sembrados viejos — igual que `cepResponse.details.monto` (sync 2026-08-23T14:30).
+ * Por eso la conversión se hace aquí y no se confía en el `typeof`.
+ */
+const MONEY_KEYS = new Set(["amount", "monto", "expectedAmount"]);
+
 function formatEventValue(key: string, value: string | number | boolean): string {
-  if ((key === "amount" || key === "monto") && typeof value === "number")
-    return formatMoney(value);
+  if (MONEY_KEYS.has(key) && typeof value !== "boolean") {
+    const n = Number(value);
+    // Si no es un número legible se cae al `String(value)` del final: mejor mostrar
+    // el valor crudo que un "$NaN".
+    if (Number.isFinite(n)) return formatMoney(n);
+  }
+  // Booleano crudo: sin esto la fila decía literalmente "false".
+  if (key === "isPartialPayment")
+    return value ? "Sí" : "No";
   if (key === "paymentDate" && typeof value === "string")
     return formatDay(value);
   if (key === "paymentMethod" && typeof value === "string")

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { cn, formatCurrency } from "@/lib/utils";
+import { attemptAmount, cn, formatCurrency } from "@/lib/utils";
 import { useStore } from "@/store/useStore";
 import { ApiErrorState } from "@/components/layout/ApiErrorState";
 import { ArrowRight } from "lucide-react";
@@ -214,12 +214,9 @@ export function DashboardView({ initialTenants, initialPayments, initialProperti
     a.createdAt.startsWith(currentYM) &&
     (a.status === "VERIFIED" || a.status === "MANUAL_VERIFIED")
   );
-  // El fallback a `amount` es obligatorio: los pagos registrados a mano no tienen
-  // ocrData ni cepResponse (types.ts §PaymentAttempt.amount). Sin él este KPI
-  // contradice a PagosView y a la gráfica de barras.
-  const totalCobrado = cobradoThisMonth.reduce(
-    (s, a) => s + Number(a.ocrData?.monto ?? a.cepResponse?.monto ?? a.amount ?? 0), 0
-  );
+  // `attemptAmount` cubre el caso que antes se resolvía aquí a mano: los pagos
+  // registrados a mano no tienen ocrData ni cepResponse y solo llevan `amount`.
+  const totalCobrado = cobradoThisMonth.reduce((s, a) => s + attemptAmount(a), 0);
 
   const cobradoCount   = tenantsWithStatus.filter((t) => t.paymentStatus === "Pagado").length;
   const porCobrarCount = tenantsWithStatus.filter((t) => t.paymentStatus !== "Pagado").length;
@@ -236,7 +233,7 @@ export function DashboardView({ initialTenants, initialPayments, initialProperti
       .forEach((a) => {
         if (a.tenantId == null) return;
         const tid = String(a.tenantId);
-        const amt = Number(a.ocrData?.monto ?? a.cepResponse?.monto ?? a.amount ?? 0);
+        const amt = attemptAmount(a);
         map.set(tid, (map.get(tid) ?? 0) + amt);
       });
     return map;
@@ -299,7 +296,7 @@ export function DashboardView({ initialTenants, initialPayments, initialProperti
           a.createdAt.startsWith(ym) &&
           (a.status === "VERIFIED" || a.status === "MANUAL_VERIFIED")
         )
-        .reduce((s, a) => s + Number(a.ocrData?.monto ?? a.cepResponse?.monto ?? a.amount ?? 0), 0);
+        .reduce((s, a) => s + attemptAmount(a), 0);
       return { m, v, idx };
     });
   }, [payments, now]);
@@ -318,9 +315,11 @@ export function DashboardView({ initialTenants, initialPayments, initialProperti
             p.createdAt.startsWith(currentYM) &&
             (p.status === "VERIFIED" || p.status === "MANUAL_VERIFIED" || p.status === "PARTIAL")
           );
-          const amount = verified
-            ? Number(verified.ocrData?.monto ?? verified.cepResponse?.monto ?? verified.amount ?? t.monthlyAmount ?? 0)
-            : Number(t.monthlyAmount ?? 0);
+          // `attemptAmount` colapsa "sin señal legible" a 0, así que el respaldo a la
+          // renta pactada se hace explícito: un pago verificado sin importe legible
+          // debe mostrar lo que se esperaba, no un cero.
+          const paid = verified ? attemptAmount(verified) : 0;
+          const amount = paid > 0 ? paid : Number(t.monthlyAmount ?? 0);
           const day = verified
             ? new Date(verified.createdAt).getDate()
             : t.paymentDay ? Number(t.paymentDay) : null;
@@ -356,7 +355,7 @@ export function DashboardView({ initialTenants, initialPayments, initialProperti
             day: d.getDate(),
             tenantName: tenant?.name ?? "—",
             propertyName: property?.name ?? "—",
-            amount: Number(p.ocrData?.monto ?? p.cepResponse?.monto ?? p.amount ?? 0),
+            amount: attemptAmount(p),
             status: "Pagado",
             monthIdx: d.getMonth(),
           };
@@ -382,7 +381,7 @@ export function DashboardView({ initialTenants, initialPayments, initialProperti
           day: new Date(p.createdAt).getDate(),
           tenantName: tenant?.name ?? "—",
           propertyName: property?.name ?? "—",
-          amount: Number(p.ocrData?.monto ?? p.cepResponse?.monto ?? p.amount ?? 0),
+          amount: attemptAmount(p),
           status: "Pagado",
         };
       })

@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useStore } from "@/store/useStore";
 import { ApiErrorState } from "@/components/layout/ApiErrorState";
-import { cn, formatCurrency } from "@/lib/utils";
+import { attemptAmount, cn, formatCurrency } from "@/lib/utils";
 import type { AttemptStatus, PaymentAttempt } from "@/lib/types";
 import { AttemptStatusBadge } from "@/components/ui/StatusBadge";
 import { PaymentDialog } from "./PaymentDialog";
@@ -38,7 +38,7 @@ function exportarCSV(
     const ti   = tenantMap.get(a.tenantPhone);
     const prop = ti ? (propertyMap.get(ti.propertyId) ?? "—") : "—";
     const name = ti?.name ?? a.tenantPhone;
-    const amount = Number(a.ocrData?.monto ?? a.cepResponse?.monto ?? a.amount ?? 0);
+    const amount = attemptAmount(a);
     return [name, prop, amount.toString(), format(new Date(a.createdAt), "dd/MM/yyyy HH:mm"), (a.ocrData?.claveRastreo as string) ?? "—", (a.ocrData?.bancoEmisor as string) ?? "—", a.status];
   });
   const csv = [headers, ...data].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
@@ -150,7 +150,7 @@ export function PagosView({ initialPayments }: { initialPayments: PaymentAttempt
   );
 
   const totalCobrado = baseFiltered.filter((a) => isCobrado(a.status))
-    .reduce((s, a) => s + Number(a.ocrData?.monto ?? a.cepResponse?.monto ?? a.amount ?? 0), 0);
+    .reduce((s, a) => s + attemptAmount(a), 0);
   const animatedTotal = useCountUp(totalCobrado);
 
   const handleMonthChange    = (v: string | null) => { setFilterMonth(v ?? format(new Date(), "yyyy-MM")); setFilterGen((g) => g + 1); };
@@ -351,7 +351,7 @@ export function PagosView({ initialPayments }: { initialPayments: PaymentAttempt
           ) : filtered.map((attempt, i) => {
             const ti       = tenantMap.get(attempt.tenantPhone);
             const propName = ti ? (propertyMap.get(ti.propertyId) ?? "—") : "—";
-            const amount   = Number(attempt.ocrData?.monto ?? attempt.cepResponse?.monto ?? attempt.amount ?? 0);
+            const amount   = attemptAmount(attempt);
             const isManual = attempt.source === "MANUAL";
             const name     = ti?.name ?? attempt.tenantPhone;
             const ini      = name.split(" ").map((w: string) => w[0]).slice(0, 2).join("").toUpperCase();

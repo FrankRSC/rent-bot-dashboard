@@ -253,7 +253,22 @@ Desde el **modo manual** (§2.7) el backend añadió también:
 
 **`OcrData`** (`types.ts`): campos de `OcrExtractionResult` — todos primitivos (`string|null` o `number`): `claveRastreo`, `referencia`, `concepto`, `bancoEmisor`, `bancoReceptor`, `cuentaDestino`, `monto` (number), `fecha`, `isIntrabancario` (boolean). **No tiene campos objeto anidado.**
 
-**`CepResponse`** (`types.ts`): tiene `estado?` (string) más un campo **`details?: object`** (anidado — shape variable: `bancoEmisor`, `bancoReceptor`, `monto`, `message`, `claveRastreo`, `referencia`, `tipoCriterio`, `fechaValidacion`). El UI filtra `details` porque es un objeto y no lo renderiza directamente; si en el futuro se quiere mostrar, tratar sus sub-campos como primitivos individualmente.
+**`CepResponse`** (`types.ts`): `{ status, details? }`, tal cual lo devuelve Banxico. **El monto vive en `details.monto`.** Léelo con `attemptAmount()` de `@/lib/utils`, nunca a mano.
+
+> **Histórico, por si aparece en una BD vieja.** Hasta el 2026-08-23 el seed escribía una segunda forma: un objeto **plano** con `monto`/`claveRastreo` en la raíz. Por eso leer `cepResponse.monto` funcionaba en dev y caía en silencio con datos del bot. El backend alineó el seed (`0f0dd64`) y resembró dev: cero filas planas, verificado contra la BD (sync 2026-08-23T16:05). El campo se eliminó de `CepResponse` y el eslabón de `attemptAmount()`.
+
+**Un pago verificado puede no tener `cepResponse` en absoluto, y estar bien.** El flujo intrabancario nunca llama a Banxico —que solo liquida SPEI interbancarios—: valida por los últimos 4 dígitos de la cuenta destino contra la cuenta registrada del arrendador y cierra el intento como `VERIFIED` sin escribir `cepResponse`. **Tratar "sin CEP" como señal de duda es un falso positivo.** (`MISMO_BANCO` existe como `status` de la validación, pero es un retorno temprano que hoy no se persiste: déjalo en el tipo, no lo esperes en datos.)
+
+Tres trampas de `details`:
+1. **`details.monto` es string** con dos decimales (`"14500.00"`), no número — sale de un `toFixed(2)`. Sin `Number()` se concatena.
+2. **`details` puede no existir**: `SESION_FINALIZADA` devuelve `{ status }` a secas.
+3. **`status` no siempre es `LIQUIDADO`**: también `MISMO_BANCO` (intrabancario, con `monto` y `message`), `DEVUELTO` y `DEVOLUCION_PENDIENTE` — estos dos con `details` crudo del parser, sin `claveRastreo`, `tipoCriterio` ni `fechaValidacion`.
+
+Orden de lectura acordado con el backend, el mismo con el que ellos calculan los importes que mandan: `amount` → `ocrData.monto` → `cepResponse.details.monto`.
+
+El UI filtra `details` de las vistas de detalle porque es un objeto y no lo renderiza directamente; si se quiere mostrar, tratar sus sub-campos como primitivos individualmente.
+
+> El OpenAPI del backend **no arbitra** este shape: la columna es `jsonb` sin DTO, así que sale como `{[key: string]: unknown}`. Este bloque es la fuente hasta que lo tipen.
 
 **`PaymentEvent.data`** es `Record<string, any>` libre. Keys que llegan como **objeto anidado** (no primitivo) y el UI filtra automáticamente:
 - `extractedData` (evento `OCR_SUCCESS`) — mismo shape que `OcrData`.
@@ -261,6 +276,17 @@ Desde el **modo manual** (§2.7) el backend añadió también:
 - `overrides` (evento `RECEIPT_UPLOADED`) — campos manuales que el arrendador sobreescribió al subir el comprobante.
 
 El resto de eventos llevan solo primitivos (`reason`, `status`, `error`, `size`, `mediaId`, `messageId`).
+
+**Evento `VERIFIED`** — el shape depende de si el pago fue inter o intrabancario (backend alineado en `5527011`, sync 2026-08-23T14:30):
+
+- Interbancario: `{ status: 'LIQUIDADO', monto, banco, expectedAmount, isPartialPayment }`
+- Intrabancario: `{ account: '****9719' }` — sin `monto` ni `reason`
+
+Cuidado con los tipos, es la misma trampa del CEP:
+
+- **`monto` es string** (`"19500.00"`), no número — sale de `state.monto`, que es `string | null`. `formatEventValue` lo convierte con `Number()` antes de formatear; no asumas `typeof === "number"`.
+- `expectedAmount` sí es number.
+- **`isPartialPayment` puede llegar `null`** (es `expectedAmount && paid < esperado`, no un booleano forzado). `null` no se renderiza; `false` se muestra como "No".
 
 `AttemptStatus` = `PENDING | VERIFIED | REJECTED | ERROR | REVIEW | ABANDONED | MANUAL_VERIFIED | PARTIAL`.
 
@@ -504,8 +530,8 @@ OcrSummaryBucket {
 ```ts
 {
   id: number;
-  attemptId: number;
-  methodUsed: string;
+  attemptId: string;                   // UUID del intento
+  methodUsed: string | null;           // null en intentos sin método registrado — ver nota abajo
   rawText: string | null;              // casi siempre null (no se persiste)
   originalExtraction: ExtractionFields; // lo que detectó el OCR
   correctedValues: ExtractionFields;    // valores tras la corrección
@@ -533,6 +559,10 @@ DatasetCaseSource = "complete"   // se completaron campos que OCR/IA no leyó
 ```
 
 UI en `/admin/dataset`: tabla con filas expandibles. Click en una fila muestra diff rojo (original) → verde (corregido); campos sin cambio en gris.
+
+**`methodUsed` puede venir `null`** en intentos anteriores a que el pipeline empezara a registrarlo (incluye el seed demo). Ojo con la asimetría: `GET /payments/metrics/ocr` sustituye esos casos por la etiqueta `"SIN_DATO"`, pero **este endpoint devuelve el `null` crudo**. La tabla los marca como "Sin dato" en gris, no como un método más.
+
+**Por qué la asimetría es deliberada** (confirmado por el backend, sync 2026-08-23): en `metrics/ocr` el campo es la **llave de agrupación** del `GROUP BY` (`COALESCE(ocr_data->>'methodUsed','SIN_DATO')`), y una llave necesita nombre imprimible: sin la etiqueta esos intentos se caerían del renglón o llegarían como una fila sin título. En `dataset-cases` el campo es **el dato del caso**, no una llave: los registros son material de auditoría y de entrenamiento, así que se devuelven tal como se guardaron. Poner `"SIN_DATO"` ahí sería inventar que el pipeline reportó un método cuando no reportó ninguno. No normalizar ninguno de los dos hacia el otro.
 
 #### Planes y suscripciones — ✅ **backend listo (2026-08-15), UI pendiente**
 

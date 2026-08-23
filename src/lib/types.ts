@@ -154,22 +154,53 @@ export interface OcrData {
 }
 
 /**
- * Respuesta de la consulta al CEP de Banxico (comprobante electrónico de pago)
- * con la que el bot verifica la transferencia. Misma tolerancia que `OcrData`.
+ * Cuerpo del CEP cuando Banxico sí devolvió el comprobante.
+ *
+ * `monto` es **string con dos decimales** (`"14500.00"`), no número: sale de un
+ * `toFixed(2)` del backend. Sumarlo sin `Number()` concatena en vez de sumar.
  */
-export interface CepResponse {
+export interface CepDetails {
+  monto?: string;
   claveRastreo?: string;
-  monto?: number;
   bancoEmisor?: string;
-  bancoReceptor?: string;
+  bancoOrdenante?: string;
+  bancoBeneficiario?: string;
   cuentaBeneficiario?: string;
   nombreBeneficiario?: string;
   cuentaOrdenante?: string;
   nombreOrdenante?: string;
-  fechaOperacion?: string;
-  concepto?: string;
-  referenciaNumerica?: string;
+  fecha?: string;
+  hora?: string;
   estado?: string;
+  referencia?: string;
+  [key: string]: unknown;
+}
+
+/**
+ * Respuesta de la consulta al CEP de Banxico (comprobante electrónico de pago)
+ * con la que el bot verifica la transferencia. Misma tolerancia que `OcrData`.
+ *
+ * **Tiene dos formas según quién escribió la fila** (confirmado por el backend en
+ * rent-collector-sync.md 2026-08-23T02:58):
+ *
+ * Forma única: `{ status, details? }`, tal cual lo devuelve Banxico. **El monto vive
+ * en `details.monto`.**
+ *
+ * Hubo una segunda forma —objeto **plano** con `monto`/`claveRastreo` en la raíz—
+ * que solo producía el seed, y por eso leer `cepResponse.monto` funcionaba en dev y
+ * caía en silencio con datos reales. El backend alineó su seed y resembró la BD de
+ * dev: quedaron cero filas planas (sync 2026-08-23T16:05).
+ *
+ * `details` puede faltar: `SESION_FINALIZADA` devuelve `{ status }` a secas. Y
+ * `status` no siempre es `LIQUIDADO` — también `MISMO_BANCO`, `DEVUELTO` y
+ * `DEVOLUCION_PENDIENTE`, estos dos con `details` crudo del parser (sin
+ * `claveRastreo` ni `fechaValidacion`).
+ *
+ * Para leer el importe usa `attemptAmount()` de `@/lib/utils`, no estos campos.
+ */
+export interface CepResponse {
+  status?: string;
+  details?: CepDetails;
   [key: string]: unknown;
 }
 
@@ -196,6 +227,12 @@ export interface PaymentAttempt {
   status: AttemptStatus;
   verifiedOnFirstTry: boolean;
   ocrData?: OcrData;
+  /**
+   * Ausente en los pagos **intrabancarios**, incluso verificados: ese flujo coteja
+   * los últimos 4 dígitos de la cuenta destino y nunca llama a Banxico, que solo
+   * liquida SPEI interbancarios (sync 2026-08-23T13:40). No lo trates como señal
+   * de duda: un `VERIFIED` sin `cepResponse` está igual de validado.
+   */
   cepResponse?: CepResponse;
   createdAt: string;
   completedAt?: string;
@@ -266,6 +303,12 @@ export interface ReportTenantRow {
   monthlyAmount: number | null;
   paymentStatus: PaymentStatus;
   lastVerifiedAt: string | null;
+  /**
+   * Suma de lo abonado en el mes (`VERIFIED` + `MANUAL_VERIFIED` + `PARTIAL`);
+   * `null` si no hubo abonos. Cambió de significado el 2026-08-20: antes era solo
+   * el importe del intento verificado, así que un mes con varios abonos ahora da
+   * un número mayor.
+   */
   amountPaid: number | null;
   attemptsCount: number;
 }
@@ -297,6 +340,12 @@ export interface LandlordReport {
     // (antes `vencidoCount` era alias del otro).
     atrasadoCount: number;
     vencidoCount: number;
+    // Saldo por cobrar desglosado por plazo. Suman exactamente `totalPendiente`
+    // (el backend lo verificó contra su BD). Ojo con el nombre: siguen el patrón
+    // de `vigenteCount`, no son `montoVigente`.
+    vigenteAmount: number;
+    atrasadoAmount: number;
+    vencidoAmount: number;
     totalTenants: number;
     verifiedOnFirstTryCount: number;
   };
@@ -444,7 +493,10 @@ export type DatasetCaseSource = "complete" | "review";
 export interface DatasetCase {
   id: number; // fila propia de admin/dataset, no migró a UUID (ver backend-schema.ts OcrDatasetCase)
   attemptId: string;
-  methodUsed: string;
+  /** null en intentos anteriores a que el pipeline registrara el método (incluye el
+   *  seed demo). `/payments/metrics/ocr` los agrupa como `"SIN_DATO"`, pero este
+   *  endpoint devuelve el null crudo — la UI debe mostrarlo como ausencia. */
+  methodUsed: string | null;
   rawText: string | null;
   originalExtraction: ExtractionFields;
   correctedValues: ExtractionFields;

@@ -15,6 +15,11 @@ const FIELD_LABELS: Record<string, string> = {
   monto:              "Monto",
   ocrMonto:           "Monto leído del comprobante",
   cepMonto:           "Monto verificado",
+  // El evento `VERIFIED` de producción trae estos dos; sin entrada aquí el
+  // respaldo `humanize()` los dejaba como "Expected amount" e "Is partial
+  // payment" (sync 2026-08-23T13:40).
+  expectedAmount:     "Monto esperado",
+  isPartialPayment:   "Pago parcial",
   fecha:              "Fecha de la operación",
   fechaOperacion:     "Fecha de la operación",
   claveRastreo:       "Clave de rastreo / Referencia",
@@ -22,10 +27,13 @@ const FIELD_LABELS: Record<string, string> = {
   concepto:           "Concepto",
   sello:              "Sello digital",
   estado:             "Estado",
+  // `estadoOperacion` solo lo produce el seed; producción manda `status`. Se
+  // queda porque sigue habiendo filas viejas con esa llave.
   estadoOperacion:    "Estado",
   isIntrabancario:    "Tipo de transferencia",
 
   // ── Bancos y personas ──────────────────────────────────────────────────────
+  banco:              "Banco",
   bancoEmisor:        "Banco emisor",
   bancoReceptor:      "Banco receptor",
   emisorNombre:       "Emisor",

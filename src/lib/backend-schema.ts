@@ -1146,7 +1146,9 @@ export interface components {
             attempts: components["schemas"]["PaymentAttempt"][];
         };
         ReportSummaryDto: {
+            /** @description Suma de lo abonado en el mes */
             totalCobrado: number;
+            /** @description Saldo por cobrar: renta menos lo abonado */
             totalPendiente: number;
             cobradoCount: number;
             /** @description Dentro de su plazo (día de pago + gracia) */
@@ -1160,6 +1162,12 @@ export interface components {
             atrasadoCount: number;
             /** @description El mes cerró sin pago */
             vencidoCount: number;
+            /** @description Saldo por cobrar de los que siguen en plazo */
+            vigenteAmount: number;
+            /** @description Saldo por cobrar de los atrasados */
+            atrasadoAmount: number;
+            /** @description Saldo por cobrar de los vencidos */
+            vencidoAmount: number;
             totalTenants: number;
             verifiedOnFirstTryCount: number;
         };
@@ -1192,6 +1200,7 @@ export interface components {
             paymentStatus: "Pagado" | "Vigente" | "Atrasado" | "Vencido";
             /** Format: date-time */
             lastVerifiedAt: string | null;
+            /** @description Suma de lo abonado en el mes; null si no hubo abonos */
             amountPaid: number | null;
             attemptsCount: number;
         };

@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CreditCard, Banknote, Pencil, AlertTriangle } from "lucide-react";
-import { format } from "date-fns";
+import { CreditCard, Banknote, Pencil, AlertTriangle, CalendarDays } from "lucide-react";
+import { addMonths, format } from "date-fns";
 import { es } from "date-fns/locale";
 import {
   Dialog,
@@ -44,7 +44,29 @@ function formatDay(ymd: string | null): string {
   return format(new Date(y, m - 1, d), "d MMM yyyy", { locale: es });
 }
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
+/** "YYYY-MM-DD" en hora local. `toISOString()` daría el día en UTC, que en México
+ *  (UTC-6) ya es el siguiente a partir de las 18:00 — y estas fechas son días de
+ *  calendario, no instantes. */
+const toYMD = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")}`;
+
+const todayISO = () => toYMD(new Date());
+
+/**
+ * Último día cubierto por `m` meses contados desde `start`, con la aritmética del
+ * backend: `currentPeriodEnd` es **inclusive** (§Suscripciones CONTRATOS_API.md),
+ * así que es el día anterior al mismo día del mes m-ésimo.
+ */
+function coverageEnd(start: string, m: number): string {
+  const [y, mo, d] = start.split("-").map(Number);
+  if (!y || !mo || !d) return start;
+  const end = addMonths(new Date(y, mo - 1, d), m);
+  end.setDate(end.getDate() - 1);
+  return toYMD(end);
+}
+
 
 // ── Estado de la suscripción ─────────────────────────────────────────────────
 
@@ -121,13 +143,26 @@ function AssignPlanDialog({
     String(subscription?.contractedTenants ?? Math.max(tenantsUsed ?? 1, 1))
   );
   const [specialPlanId, setSpecialPlanId] = useState("");
-  const [months, setMonths] = useState("1");
+  const [startDate, setStartDate] = useState(todayISO);
+  const [cortesia, setCortesia] = useState(false);
   const [notes, setNotes] = useState(subscription?.notes ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const n = parseInt(contracted, 10);
-  const valid = Number.isFinite(n) && n > 0;
+  const valid = Number.isFinite(n) && n > 0 && !!startDate;
+
+  /**
+   * Asignar cubre **un solo mes**: la suscripción es mensual y cada pago capturado
+   * extiende `currentPeriodEnd` otro mes (§Suscripciones CONTRATOS_API.md). Por eso
+   * la única fecha que se pide es el inicio; el fin se deriva y no se elige.
+   *
+   * La cortesía de lanzamiento es la única excepción: son 3 meses de golpe, y este
+   * diálogo es el único lugar donde puede nacer una `CORTESIA` (confirmado por el
+   * backend en rent-collector-sync.md 2026-08-23T02:58).
+   */
+  const months = cortesia ? 3 : 1;
+  const periodEnd = useMemo(() => coverageEnd(startDate, months), [startDate, months]);
 
   // Precio estimado: réplica de la derivación de escalón del backend (gana el plan
   // activo cuyo rango contiene a `n`). Es una previsualización — el monto real lo
@@ -158,7 +193,12 @@ function AssignPlanDialog({
         landlordId: landlord.id,
         contractedTenants: n,
         ...(specialPlanId ? { planId: specialPlanId } : {}),
-        ...(months && parseInt(months, 10) > 1 ? { months: parseInt(months, 10) } : {}),
+        // `startDate` se manda explícito: su default es "hoy en UTC", que después de
+        // las 18:00 hora de México ya es otro día.
+        startDate,
+        // El alta normal cubre un mes; la cortesía de lanzamiento son 3 y además
+        // cambia el estado, que es lo que la distingue del efectivo recibido.
+        ...(cortesia ? { status: "CORTESIA" as const, months: 3 } : {}),
         ...(notes.trim() ? { notes: notes.trim() } : {}),
       });
       onSaved();
@@ -247,30 +287,59 @@ function AssignPlanDialog({
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <label htmlFor="months" className="text-sm font-medium">
-                Meses de vigencia
-              </label>
-              <Input
-                id="months"
-                type="number"
-                min={1}
-                value={months}
-                onChange={(e) => setMonths(e.target.value)}
-              />
+          <div className="space-y-1.5">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label htmlFor="startDate" className="text-sm font-medium">
+                  Inicio de vigencia
+                </label>
+                <Input
+                  id="startDate"
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="notes" className="text-sm font-medium">
+                  Notas
+                </label>
+                <Input
+                  id="notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Opcional"
+                />
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <label htmlFor="notes" className="text-sm font-medium">
-                Notas
-              </label>
-              <Input
-                id="notes"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Opcional"
+            <label className="flex items-start gap-2 cursor-pointer pt-0.5">
+              <input
+                type="checkbox"
+                checked={cortesia}
+                onChange={(e) => setCortesia(e.target.checked)}
+                className="mt-0.5 h-3.5 w-3.5 accent-[#2952F3]"
               />
-            </div>
+              <span className="text-[13px] text-slate-600">
+                Cortesía de lanzamiento
+                <span className="text-slate-400"> — 3 meses sin cobro</span>
+              </span>
+            </label>
+
+            {startDate && (
+              <p className="flex items-start gap-1.5 text-[12px] text-slate-500">
+                <CalendarDays className="w-3.5 h-3.5 mt-[1px] shrink-0" />
+                <span>
+                  Cubre{" "}
+                  <strong className="text-[#0B1426]">
+                    {cortesia ? "tres meses" : "un mes"}
+                  </strong>
+                  : hasta el {formatDay(periodEnd)}, inclusive.{" "}
+                  {cortesia
+                    ? "Queda como cortesía, no como efectivo recibido."
+                    : "Cada pago que captures después extiende la vigencia otro mes."}
+                </span>
+              </p>
+            )}
           </div>
 
           {subscription && (

@@ -203,20 +203,24 @@ function buildReport(data: MockData): LandlordReport {
   const atrasado = data.tenants.filter((t) => t.paymentStatus === "Atrasado");
   const vencido = data.tenants.filter((t) => t.paymentStatus === "Vencido");
   const totalCobrado = paid.reduce((s, t) => s + Number(t.monthlyAmount ?? 0), 0);
+  const saldo = (ts: typeof data.tenants) =>
+    ts.reduce((s, t) => s + Number(t.monthlyAmount ?? 0), 0);
 
   return {
     month: CURRENT_YM,
     summary: {
       totalCobrado,
-      totalPendiente: [...vigente, ...atrasado, ...vencido].reduce(
-        (s, t) => s + Number(t.monthlyAmount ?? 0),
-        0
-      ),
+      totalPendiente: saldo([...vigente, ...atrasado, ...vencido]),
       cobradoCount: paid.length,
       vigenteCount: vigente.length,
       pendienteCount: vigente.length, // alias deprecado, igual que el backend
       atrasadoCount: atrasado.length,
       vencidoCount: vencido.length,
+      // Los tres suman `totalPendiente`, como en el backend. El mock no tiene
+      // abonos parciales, así que el saldo es la renta completa.
+      vigenteAmount: saldo(vigente),
+      atrasadoAmount: saldo(atrasado),
+      vencidoAmount: saldo(vencido),
       totalTenants: data.tenants.length,
       verifiedOnFirstTryCount: data.payments.filter((p) => p.verifiedOnFirstTry).length,
     },

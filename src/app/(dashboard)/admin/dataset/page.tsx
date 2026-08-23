@@ -74,9 +74,20 @@ function CaseRow({ c }: { c: DatasetCase }) {
           </a>
         </td>
         <td className="px-4 py-3">
-          <span className="inline-flex items-center gap-1 text-[12px] font-medium bg-[#eef1fd] text-[#2952F3] px-2 py-0.5 rounded-md">
-            {c.methodUsed}
-          </span>
+          {c.methodUsed ? (
+            <span className="inline-flex items-center gap-1 text-[12px] font-medium bg-[#eef1fd] text-[#2952F3] px-2 py-0.5 rounded-md">
+              {c.methodUsed}
+            </span>
+          ) : (
+            // Sin la guarda, el null pintaba una píldora azul vacía que se leía como
+            // un método real sin nombre. Es ausencia de dato, y se ve como tal.
+            <span
+              className="inline-flex items-center text-[12px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md"
+              title="Intento anterior a que el pipeline registrara el método de extracción (incluye el seed demo). En /admin/metricas se agrupa como SIN_DATO."
+            >
+              Sin dato
+            </span>
+          )}
         </td>
         <td className="px-4 py-3">
           <div className="flex flex-wrap gap-1">
